@@ -467,8 +467,29 @@ app.post('/api/settings/update-camera', authMiddleware, requireAdmin, (req, res)
   recorder.updateCameraCredentials({ ip, port, username, password });
   recorder.startAll(); // restart streams with new credentials
 
+  // Persist into .env file
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      let envContent = fs.readFileSync(envPath, 'utf8');
+      envContent = envContent.replace(/TENDA_IP=.*/, `TENDA_IP=${ip}`);
+      if (username) envContent = envContent.replace(/TENDA_USER=.*/, `TENDA_USER=${username}`);
+      if (password !== undefined) envContent = envContent.replace(/TENDA_PASS=.*/, `TENDA_PASS=${password}`);
+      const auth = (username && password) ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
+      envContent = envContent.replace(/CH1_RTSP_MAIN=.*/, `CH1_RTSP_MAIN=rtsp://${auth}${ip}:554/ch=1&subtype=0`);
+      envContent = envContent.replace(/CH1_RTSP_SUB=.*/, `CH1_RTSP_SUB=rtsp://${auth}${ip}:554/ch=1&subtype=1`);
+      envContent = envContent.replace(/CH2_RTSP_MAIN=.*/, `CH2_RTSP_MAIN=rtsp://${auth}${ip}:554/ch=2&subtype=0`);
+      envContent = envContent.replace(/CH2_RTSP_SUB=.*/, `CH2_RTSP_SUB=rtsp://${auth}${ip}:554/ch=2&subtype=1`);
+      fs.writeFileSync(envPath, envContent, 'utf8');
+      console.log('[Config] .env updated with new camera credentials');
+    }
+  } catch (err) {
+    console.error('[Config] Failed to persist .env:', err.message);
+  }
+
   res.json({ success: true, message: `Kamera berhasil dihubungkan ke IP ${ip}` });
 });
+
 
 // GET /api/settings/scan-lan
 // Fast ARP / Port 554 scanner on local subnet

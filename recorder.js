@@ -68,16 +68,21 @@ class TendaCCTVRecorder {
   updateCameraCredentials({ ip, port, username, password }) {
     if (!ip) return;
     const p = port || 554;
-    const u = encodeURIComponent(username || 'admin');
-    const pwd = encodeURIComponent(password || 'admin123456');
+    const authPart = (username && password) ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : '';
 
-    this.cameras.cam1.rtspMain = `rtsp://${u}:${pwd}@${ip}:${p}/ch=1&subtype=0`;
-    this.cameras.cam1.rtspSub = `rtsp://${u}:${pwd}@${ip}:${p}/ch=1&subtype=1`;
-    this.cameras.cam2.rtspMain = `rtsp://${u}:${pwd}@${ip}:${p}/ch=2&subtype=0`;
-    this.cameras.cam2.rtspSub = `rtsp://${u}:${pwd}@${ip}:${p}/ch=2&subtype=1`;
+    this.cameras.cam1.rtspMain = `rtsp://${authPart}${ip}:${p}/ch=1&subtype=0`;
+    this.cameras.cam1.rtspSub = `rtsp://${authPart}${ip}:${p}/ch=1&subtype=1`;
+    this.cameras.cam2.rtspMain = `rtsp://${authPart}${ip}:${p}/ch=2&subtype=0`;
+    this.cameras.cam2.rtspSub = `rtsp://${authPart}${ip}:${p}/ch=2&subtype=1`;
 
-    console.log(`[Recorder] Camera endpoints updated to IP ${ip}:${p}`);
+    this.snapshots = {
+      cam1: { buffer: null, timestamp: 0 },
+      cam2: { buffer: null, timestamp: 0 }
+    };
+
+    console.log(`[Recorder] Camera endpoints updated to IP ${ip}:${p} (Auth: ${authPart ? 'enabled' : 'none'})`);
   }
+
 
   /**
    * Spawns an FFmpeg recording process for a specific camera channel

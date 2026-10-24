@@ -220,8 +220,36 @@ function updateFeedFrame(camKey, imgElem, overlayElem) {
   };
 }
 
+async function checkCameraStatus() {
+  try {
+    const res = await fetch('/api/system/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    const c1 = data.recorder?.cam1;
+    const c2 = data.recorder?.cam2;
+
+    const overlay1Text = overlayCam1.querySelector('span:last-child');
+    const overlay2Text = overlayCam2.querySelector('span:last-child');
+
+    const authErrorMsg = '⚠️ <strong>Password Kamera Salah (401 Unauthorized)</strong><br><span style="font-size:0.8rem;color:#cbd5e1;margin-top:4px;display:inline-block;">1. Buka tab web kamera <a href="https://192.168.1.8" target="_blank" style="color:#38bdf8;text-decoration:underline;">https://192.168.1.8</a> lalu matikan toggle <strong>RTSP Authentication</strong> dan klik Save.<br>2. ATAU klik tab <strong>⚙️ Pengaturan & Storage</strong> di atas dan masukkan password kamera Anda.</span>';
+
+    if (c1?.lastError && (c1.lastError.includes('401') || c1.lastError.includes('Unauthorized'))) {
+      if (overlay1Text) overlay1Text.innerHTML = authErrorMsg;
+    } else if (c1?.status === 'recording') {
+      if (overlay1Text) overlay1Text.textContent = 'Menghubungkan ke Lensa 1...';
+    }
+
+    if (c2?.lastError && (c2.lastError.includes('401') || c2.lastError.includes('Unauthorized'))) {
+      if (overlay2Text) overlay2Text.innerHTML = authErrorMsg;
+    } else if (c2?.status === 'recording') {
+      if (overlay2Text) overlay2Text.textContent = 'Menghubungkan ke Lensa 2...';
+    }
+  } catch (e) {}
+}
+
 function startLivePolling() {
   stopLivePolling();
+  checkCameraStatus();
   updateFeedFrame('cam1', feedCam1, overlayCam1);
   updateFeedFrame('cam2', feedCam2, overlayCam2);
 
@@ -232,6 +260,9 @@ function startLivePolling() {
       updateFeedFrame('cam2', feedCam2, overlayCam2);
     }
   }, 900);
+
+  // Periodic status check every 5 seconds
+  checkCameraStatus();
 }
 
 function stopLivePolling() {
@@ -240,6 +271,7 @@ function stopLivePolling() {
     livePollingInterval = null;
   }
 }
+
 
 // ==========================================
 // PTZ 360 STEERING CONTROLS
