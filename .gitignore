@@ -14,6 +14,14 @@ cloudflared.exe
 # User data & private credentials
 data/users.json
 
-# Temporary logs
+# Temporary logs & deployment scripts with host configs
 *.log
 tmp/
+deploy_*.js
+check_*.js
+upload_*.js
+update_*.js
+setup_*.js
+get_*.js
+start_linux_*.js
+
