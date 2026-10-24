@@ -206,19 +206,22 @@ function switchTab(tabId) {
 // ==========================================
 
 function updateFeedFrame(camKey, imgElem, overlayElem) {
-  const img = new Image();
+  const nextImg = new Image();
   const url = `/api/live/snapshot/${camKey}?t=${Date.now()}`;
-  img.src = url;
 
-  img.onload = () => {
+  nextImg.onload = () => {
     imgElem.src = url;
     overlayElem.style.display = 'none';
   };
-  img.onerror = () => {
-    // Keep showing overlay if camera hasn't replied
-    overlayElem.style.display = 'flex';
+  nextImg.onerror = () => {
+    // Do not blank out if a frame is already displayed
+    if (!imgElem.src || imgElem.naturalWidth === 0) {
+      overlayElem.style.display = 'flex';
+    }
   };
+  nextImg.src = url;
 }
+
 
 async function checkCameraStatus() {
   try {

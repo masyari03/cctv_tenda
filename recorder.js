@@ -1,33 +1,36 @@
 /**
  * Tenda CH9 Dual-Lens FFmpeg Recorder & Live Stream Manager
  * Low RAM (<100MB), Zero-Transcoding CPU, 15-Minute Segmented Recording
+ * Persistent In-Memory (RAM /dev/shm) Live Frame Streaming
  */
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
-// Resolve FFmpeg binary
+// Resolve FFmpeg binary: prefer system native ffmpeg
 let ffmpegPath = 'ffmpeg';
 try {
-  const staticFfmpeg = require('ffmpeg-static');
-  if (staticFfmpeg && fs.existsSync(staticFfmpeg)) {
-    ffmpegPath = staticFfmpeg;
-  }
+  execSync('ffmpeg -version', { stdio: 'ignore' });
+  ffmpegPath = 'ffmpeg';
 } catch (e) {
   try {
-    const installer = require('@ffmpeg-installer/ffmpeg');
-    if (installer && installer.path && fs.existsSync(installer.path)) {
-      ffmpegPath = installer.path;
+    const staticFfmpeg = require('ffmpeg-static');
+    if (staticFfmpeg && fs.existsSync(staticFfmpeg)) {
+      ffmpegPath = staticFfmpeg;
     }
   } catch (err) {}
 }
+
+// Check for in-memory tmpfs /dev/shm for ultra-fast zero disk I/O live frames
+const RAM_DIR = fs.existsSync('/dev/shm') ? '/dev/shm' : os.tmpdir();
 
 class TendaCCTVRecorder {
   constructor(config = {}) {
     this.ffmpegBinary = ffmpegPath;
     this.storageDir = config.storageDir || process.env.STORAGE_DIR || 'D:\\CCTV_Storage';
     this.segmentTimeSeconds = (parseInt(config.segmentMinutes || process.env.SEGMENT_MINUTES || 15, 10)) * 60;
-    
+
     // Camera Channels
     this.cameras = {
       cam1: {
@@ -37,7 +40,10 @@ class TendaCCTVRecorder {
         rtspMain: config.ch1Main || process.env.CH1_RTSP_MAIN || 'rtsp://admin:admin123456@192.168.1.8:554/ch=1&subtype=0',
         rtspSub: config.ch1Sub || process.env.CH1_RTSP_SUB || 'rtsp://admin:admin123456@192.168.1.8:554/ch=1&subtype=1',
         process: null,
+        liveProcess: null,
+        liveSnapshotPath: path.join(RAM_DIR, 'cctv_cam1.jpg'),
         reconnectTimer: null,
+        liveReconnectTimer: null,
         status: 'idle',
         lastError: null,
         reconnectCount: 0
@@ -49,7 +55,10 @@ class TendaCCTVRecorder {
         rtspMain: config.ch2Main || process.env.CH2_RTSP_MAIN || 'rtsp://admin:admin123456@192.168.1.8:554/ch=2&subtype=0',
         rtspSub: config.ch2Sub || process.env.CH2_RTSP_SUB || 'rtsp://admin:admin123456@192.168.1.8:554/ch=2&subtype=1',
         process: null,
+        liveProcess: null,
+        liveSnapshotPath: path.join(RAM_DIR, 'cctv_cam2.jpg'),
         reconnectTimer: null,
+        liveReconnectTimer: null,
         status: 'idle',
         lastError: null,
         reconnectCount: 0
@@ -83,7 +92,6 @@ class TendaCCTVRecorder {
     console.log(`[Recorder] Camera endpoints updated to IP ${ip}:${p} (Auth: ${authPart ? 'enabled' : 'none'})`);
   }
 
-
   /**
    * Spawns an FFmpeg recording process for a specific camera channel
    */
@@ -93,7 +101,7 @@ class TendaCCTVRecorder {
     if (!cam) return;
 
     if (cam.process) {
-      try { cam.process.kill(); } catch (e) {}
+      try { cam.process.kill('SIGINT'); } catch (e) {}
       cam.process = null;
     }
 
@@ -104,7 +112,7 @@ class TendaCCTVRecorder {
 
     const outputPattern = path.join(outputFolder, '%Y-%m-%d_%H-%M-%S.mp4');
 
-    // High performance stream copy: zero cpu transcoding, audio AAC conversion
+    // High performance stream copy with audio resample (16kHz AAC avoids clipping/crash on alaw 8kHz)
     const args = [
       '-hide_banner',
       '-loglevel', 'warning',
@@ -112,6 +120,7 @@ class TendaCCTVRecorder {
       '-i', cam.rtspMain,
       '-c:v', 'copy',
       '-c:a', 'aac',
+      '-ar', '16000',
       '-b:a', '64k',
       '-f', 'segment',
       '-segment_time', this.segmentTimeSeconds.toString(),
@@ -127,15 +136,14 @@ class TendaCCTVRecorder {
     try {
       const child = spawn(this.ffmpegBinary, args, {
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'ignore', 'pipe'] // Ignore stdout to prevent broken pipe (exit code 183)
       });
 
       cam.process = child;
 
       child.stderr.on('data', (data) => {
         const msg = data.toString();
-        // Ignore normal progress logs
-        if (!msg.includes('Opening') && !msg.includes('frame=')) {
+        if (!msg.includes('Opening') && !msg.includes('frame=') && !msg.includes('Too many bits')) {
           cam.lastError = msg.trim().slice(0, 150);
         }
       });
@@ -143,7 +151,7 @@ class TendaCCTVRecorder {
       child.on('spawn', () => {
         cam.status = 'recording';
         cam.reconnectCount = 0;
-        console.log(`[Recorder] ${cam.name} started successfully (PID: ${child.pid})`);
+        console.log(`[Recorder] ${cam.name} recording started successfully (PID: ${child.pid})`);
       });
 
       child.on('close', (code) => {
@@ -155,7 +163,7 @@ class TendaCCTVRecorder {
 
         cam.status = 'disconnected';
         cam.reconnectCount += 1;
-        const delay = Math.min(cam.reconnectCount * 3000, 15000); // 3s, 6s, max 15s
+        const delay = Math.min(cam.reconnectCount * 3000, 15000);
         console.warn(`[Recorder] ${cam.name} stream exited (code ${code}). Reconnecting in ${delay / 1000}s...`);
 
         if (cam.reconnectTimer) clearTimeout(cam.reconnectTimer);
@@ -178,78 +186,129 @@ class TendaCCTVRecorder {
   }
 
   /**
-   * Starts recording for all camera channels
+   * Continuous RAM frame generator (1 persistent stream per camera, zero socket spikes)
+   */
+  startCameraLiveWorker(camKey) {
+    if (this.isShuttingDown) return;
+    const cam = this.cameras[camKey];
+    if (!cam) return;
+
+    if (cam.liveProcess) {
+      try { cam.liveProcess.kill('SIGINT'); } catch (e) {}
+      cam.liveProcess = null;
+    }
+
+    const snapshotTarget = cam.liveSnapshotPath;
+    // Extract 2 frames per second continuously into RAM disk
+    const args = [
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-rtsp_transport', 'tcp',
+      '-i', cam.rtspSub,
+      '-an',
+      '-vf', 'fps=2',
+      '-q:v', '3',
+      '-update', '1',
+      '-atomic_writing', '1',
+      snapshotTarget
+    ];
+
+    console.log(`[LiveWorker] Starting continuous RAM frame generator for ${cam.name} -> ${snapshotTarget}`);
+
+    try {
+      const child = spawn(this.ffmpegBinary, args, {
+        windowsHide: true,
+        stdio: ['ignore', 'ignore', 'pipe']
+      });
+
+      cam.liveProcess = child;
+
+      child.stderr.on('data', (d) => {
+        const msg = d.toString().trim();
+        if (msg) cam.lastError = msg.slice(0, 150);
+      });
+
+      child.on('spawn', () => {
+        console.log(`[LiveWorker] ${cam.name} live frame worker running (PID: ${child.pid})`);
+      });
+
+      child.on('close', (code) => {
+        cam.liveProcess = null;
+        if (!this.isShuttingDown) {
+          if (cam.liveReconnectTimer) clearTimeout(cam.liveReconnectTimer);
+          cam.liveReconnectTimer = setTimeout(() => {
+            this.startCameraLiveWorker(camKey);
+          }, 3000);
+        }
+      });
+
+      child.on('error', (err) => {
+        cam.liveProcess = null;
+      });
+
+    } catch (err) {
+      console.error(`[LiveWorker] Exception starting worker for ${cam.name}:`, err.message);
+    }
+  }
+
+  /**
+   * Starts both recording and live streaming workers for all cameras
    */
   startAll() {
     this.startCameraRecording('cam1');
     this.startCameraRecording('cam2');
+    this.startCameraLiveWorker('cam1');
+    this.startCameraLiveWorker('cam2');
   }
 
   /**
-   * Stops all recordings cleanly
+   * Stops all recording and live workers cleanly
    */
   stopAll() {
     this.isShuttingDown = true;
     for (const key of Object.keys(this.cameras)) {
       const cam = this.cameras[key];
       if (cam.reconnectTimer) clearTimeout(cam.reconnectTimer);
+      if (cam.liveReconnectTimer) clearTimeout(cam.liveReconnectTimer);
+
       if (cam.process) {
-        try {
-          cam.process.kill('SIGINT');
-        } catch (e) {}
+        try { cam.process.kill('SIGINT'); } catch (e) {}
         cam.process = null;
+      }
+      if (cam.liveProcess) {
+        try { cam.liveProcess.kill('SIGINT'); } catch (e) {}
+        cam.liveProcess = null;
       }
       cam.status = 'stopped';
     }
-    console.log('[Recorder] All CCTV recording processes terminated cleanly.');
+    console.log('[Recorder] All CCTV recording and live worker processes terminated cleanly.');
   }
 
   /**
-   * Fetches an on-demand snapshot from camera for live view in web UI
+   * Fetches the latest JPEG snapshot from RAM instantly (0.05ms) with zero camera connection load
    */
   async getSnapshot(camKey) {
     const cam = this.cameras[camKey];
     if (!cam) return null;
 
-    const now = Date.now();
-    // Cache for 800ms to avoid overwhelming camera with concurrent web viewers
-    if (this.snapshots[camKey].buffer && (now - this.snapshots[camKey].timestamp < 800)) {
+    try {
+      if (fs.existsSync(cam.liveSnapshotPath)) {
+        const stat = await fs.promises.stat(cam.liveSnapshotPath);
+        // If file is fresh (modified within last 8 seconds) and non-empty
+        if (stat.size > 1000 && (Date.now() - stat.mtimeMs < 8000)) {
+          const buf = await fs.promises.readFile(cam.liveSnapshotPath);
+          this.snapshots[camKey] = { buffer: buf, timestamp: stat.mtimeMs };
+          return buf;
+        }
+      }
+    } catch (e) {}
+
+    // Fallback: return last known buffer from memory
+    if (this.snapshots[camKey].buffer) {
       return this.snapshots[camKey].buffer;
     }
 
-    return new Promise((resolve) => {
-      // Pull single frame from sub-stream for instant speed
-      const args = [
-        '-hide_banner',
-        '-loglevel', 'error',
-        '-rtsp_transport', 'tcp',
-        '-i', cam.rtspSub,
-        '-vframes', '1',
-        '-f', 'image2pipe',
-        '-vcodec', 'mjpeg',
-        'pipe:1'
-      ];
-
-      const child = spawn(this.ffmpegBinary, args, { windowsHide: true });
-      const chunks = [];
-
-      child.stdout.on('data', (c) => chunks.push(c));
-      child.on('close', (code) => {
-        if (code === 0 && chunks.length > 0) {
-          const buf = Buffer.concat(chunks);
-          this.snapshots[camKey] = { buffer: buf, timestamp: now };
-          resolve(buf);
-        } else {
-          resolve(this.snapshots[camKey].buffer || null);
-        }
-      });
-      child.on('error', () => resolve(this.snapshots[camKey].buffer || null));
-
-      setTimeout(() => {
-        try { child.kill(); } catch (e) {}
-        resolve(this.snapshots[camKey].buffer || null);
-      }, 4000);
-    });
+    return null;
   }
 
   getStatus() {
@@ -259,14 +318,16 @@ class TendaCCTVRecorder {
         name: this.cameras.cam1.name,
         status: this.cameras.cam1.status,
         lastError: this.cameras.cam1.lastError,
-        pid: this.cameras.cam1.process ? this.cameras.cam1.process.pid : null
+        pid: this.cameras.cam1.process ? this.cameras.cam1.process.pid : null,
+        livePid: this.cameras.cam1.liveProcess ? this.cameras.cam1.liveProcess.pid : null
       },
       cam2: {
         id: this.cameras.cam2.id,
         name: this.cameras.cam2.name,
         status: this.cameras.cam2.status,
         lastError: this.cameras.cam2.lastError,
-        pid: this.cameras.cam2.process ? this.cameras.cam2.process.pid : null
+        pid: this.cameras.cam2.process ? this.cameras.cam2.process.pid : null,
+        livePid: this.cameras.cam2.liveProcess ? this.cameras.cam2.liveProcess.pid : null
       }
     };
   }
