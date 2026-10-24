@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tenda CH9 Dual-Lens CCTV Server</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- LOGIN OVERLAY -->
+  <div id="loginOverlay" class="modal-overlay active">
+    <div class="modal-card">
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <div class="brand-icon" style="margin: 0 auto 12px; width: 48px; height: 48px; font-size: 24px;">📹</div>
+        <h2 style="font-size: 1.3rem; margin-bottom: 4px;">Pintu Masuk CCTV Server</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem;">Tenda CH9 Dual-Lens 360° Surveillance</p>
+      </div>
+
+      <div id="loginError" style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; padding: 10px; border-radius: var(--radius-sm); font-size: 0.85rem; margin-bottom: 1rem;"></div>
+
+      <form id="loginForm" style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="loginUsername" class="form-control" placeholder="Masukkan username" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" class="form-control" placeholder="Masukkan password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn-primary" style="margin-top: 8px;">Masuk ke Sistem</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN APP WRAPPER -->
+  <div id="appWrapper" style="display: none; flex-direction: column; min-height: 100vh;">
+    <!-- HEADER -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">📹</div>
+        <div>
+          <h1>TENDA CH9 DUAL-LENS</h1>
+          <span>Server Penyimpanan Mandiri (50 GB)</span>
+        </div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-btn active" data-tab="tabLive">📺 Live 360°</button>
+        <button class="nav-btn" data-tab="tabPlayback" id="navPlayback">⏪ Reka Ulang</button>
+        <button class="nav-btn" data-tab="tabUsers" id="navUsers">👥 Kelola User</button>
+        <button class="nav-btn" data-tab="tabSettings" id="navSettings">⚙️ Pengaturan & Storage</button>
+      </nav>
+
+      <div class="user-menu">
+        <div class="user-badge">
+          <div class="avatar" id="userAvatar">A</div>
+          <div>
+            <div id="userName" style="font-weight: 600;">Admin</div>
+            <div id="userRole" style="font-size: 0.75rem; color: var(--accent-cyan); text-transform: uppercase;">ADMIN</div>
+          </div>
+        </div>
+        <button id="btnLogout" class="btn-logout">Keluar</button>
+      </div>
+    </header>
+
+    <!-- CONTENT BODY -->
+    <main>
+      <!-- TAB 1: LIVE 360 VIEW -->
+      <section id="tabLive" class="tab-content active">
+        <div class="cctv-grid">
+          <!-- CAMERA 1: PTZ 360 -->
+          <div class="cam-card">
+            <div class="cam-header">
+              <div class="cam-title">
+                <span class="live-indicator"></span>
+                <span>Lensa 1: Pan / Tilt 360°</span>
+              </div>
+              <span style="font-size: 0.75rem; background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); padding: 2px 8px; border-radius: 4px;">PTZ MOTOR</span>
+            </div>
+            <div class="cam-feed-container">
+              <img id="feedCam1" class="cam-feed" alt="Live Feed Camera 1">
+              <div id="overlayCam1" class="feed-overlay">
+                <span style="font-size: 24px;">🔄</span>
+                <span>Menghubungkan ke Lensa 1...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CAMERA 2: FIXED LENS -->
+          <div class="cam-card">
+            <div class="cam-header">
+              <div class="cam-title">
+                <span class="live-indicator"></span>
+                <span>Lensa 2: Fixed Wide-Angle</span>
+              </div>
+              <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 2px 8px; border-radius: 4px;">SUDUT LEBAR</span>
+            </div>
+            <div class="cam-feed-container">
+              <img id="feedCam2" class="cam-feed" alt="Live Feed Camera 2">
+              <div id="overlayCam2" class="feed-overlay">
+                <span style="font-size: 24px;">🔄</span>
+                <span>Menghubungkan ke Lensa 2...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 360 STEERING CONTROLLER (PTZ) -->
+        <div class="glass-panel ptz-steering-box" id="ptzContainer">
+          <div class="dpad-container">
+            <button class="dpad-btn dpad-up" id="btnPtzUp" title="Putar Atas">▲</button>
+            <button class="dpad-btn dpad-left" id="btnPtzLeft" title="Putar Kiri">◀</button>
+            <button class="dpad-btn dpad-center" id="btnPtzStop" title="Tengah / Stop">●</button>
+            <button class="dpad-btn dpad-right" id="btnPtzRight" title="Putar Kanan">▶</button>
+            <button class="dpad-btn dpad-down" id="btnPtzDown" title="Putar Bawah">▼</button>
+          </div>
+
+          <div class="ptz-info-card">
+            <h3>🎮 Kontrol Kemudi Motor 360°</h3>
+            <p style="color: var(--text-secondary); font-size: 0.9rem;">
+              Tekan dan tahan tombol arah untuk memutar motor lensa 1. Anda juga dapat menggunakan tombol panah keyboard saat berada di halaman ini.
+            </p>
+            <div class="keyboard-hint">
+              <span>Shortcut Keyboard:</span>
+              <span class="kbd-badge">↑ Atas</span>
+              <span class="kbd-badge">↓ Bawah</span>
+              <span class="kbd-badge">← Kiri</span>
+              <span class="kbd-badge">→ Kanan</span>
+            </div>
+            <div id="ptzLockNotice" style="display: none; color: #fb7185; font-size: 0.85rem; background: rgba(244, 63, 94, 0.1); padding: 8px 12px; border-radius: 6px;">
+              🔒 Akses kemudi 360° dikunci oleh Administrator untuk akun Anda.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: REKA ULANG (PLAYBACK) -->
+      <section id="tabPlayback" class="tab-content">
+        <div class="playback-layout">
+          <!-- SIDEBAR FILTER -->
+          <div class="glass-panel filter-card">
+            <h3 style="font-size: 1rem;">Filter Rekaman</h3>
+
+            <div class="form-group">
+              <label>Pilih Lensa Kamera</label>
+              <select id="playbackCameraSelect" class="form-control">
+                <option value="cam1">Lensa 1: Pan / Tilt 360°</option>
+                <option value="cam2">Lensa 2: Fixed Wide-Angle</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Pilih Tanggal</label>
+              <input type="date" id="playbackDateInput" class="form-control">
+            </div>
+
+            <button id="btnFetchRecordings" class="btn-primary" style="padding: 8px;">Tampilkan Rekaman</button>
+
+            <div style="margin-top: 8px;">
+              <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px;">
+                Daftar Segmen (15 Menitan):
+              </div>
+              <div id="clipsList" class="clips-list">
+                <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 2rem 0;">
+                  Pilih tanggal untuk melihat arsip rekaman.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- VIDEO PLAYER -->
+          <div class="glass-panel player-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 id="currentPlayingTitle" style="font-size: 1.1rem;">Pemutar Reka Ulang</h3>
+                <span id="currentPlayingSub" style="font-size: 0.8rem; color: var(--text-muted);">Pilih salah satu klip dari daftar untuk memutar.</span>
+              </div>
+              <div id="downloadContainer" style="display: none;">
+                <button id="btnDownloadClip" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.85rem;">
+                  ⬇️ Download Klip
+                </button>
+              </div>
+            </div>
+
+            <div class="video-container">
+              <video id="playbackVideo" controls autoplay playsinline></video>
+            </div>
+
+            <!-- SPEED BAR -->
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border-color);">
+              <div class="speed-controls">
+                <span style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">Kecepatan Putar:</span>
+                <button class="btn-speed" data-speed="0.5">0.5x</button>
+                <button class="btn-speed active" data-speed="1.0">1.0x</button>
+                <button class="btn-speed" data-speed="2.0">2.0x</button>
+                <button class="btn-speed" data-speed="4.0">4.0x</button>
+                <button class="btn-speed" data-speed="8.0">8.0x</button>
+              </div>
+              <div style="font-size: 0.85rem; color: var(--accent-emerald);">
+                🎙️ Suara Mikrofon: Aktif
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: KELOLA USER (ADMIN ONLY) -->
+      <section id="tabUsers" class="tab-content">
+        <div class="glass-panel" style="padding: 1.5rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h2 style="font-size: 1.25rem;">Manajemen Hak Akses Pengguna</h2>
+              <p style="color: var(--text-secondary); font-size: 0.85rem;">Atur izin bertingkat untuk tamu, staf, atau anggota keluarga.</p>
+            </div>
+            <button id="btnOpenAddUser" class="btn-primary">+ Tambah Pengguna Baru</button>
+          </div>
+
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Nama</th>
+                <th>Peran</th>
+                <th>Hak Akses Khusus</th>
+                <th>Masa Berlaku</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <!-- Loaded via app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 4: PENGATURAN & STORAGE -->
+      <section id="tabSettings" class="tab-content">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+          <!-- STORAGE MONITOR CARD -->
+          <div class="glass-panel" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 8px;">💾 Status Kapasitas Harddisk 500GB (Drive D:)</h3>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+              Folder penyimpanan dibatasi maksimal 50 GB. Sistem FIFO akan menghapus file rekaman paling lama secara otomatis saat kuota tercapai.
+            </p>
+
+            <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 0.95rem;">
+              <span>Kuota Terpakai</span>
+              <span id="storageText">0 GB / 50 GB (0%)</span>
+            </div>
+            <div class="storage-progress-bar">
+              <div id="storageFill" class="storage-progress-fill" style="width: 0%;"></div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 1.25rem;">
+              <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Sisa Free Space Drive D:</div>
+                <div id="freeDiskText" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">- GB</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Total File Rekaman:</div>
+                <div id="totalFilesText" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);">0 File</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CAMERA CONNECTION SETTINGS -->
+          <div class="glass-panel" style="padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <h3>📹 Konfigurasi IP CCTV Tenda CH9</h3>
+              <button id="btnScanLan" class="btn-primary" style="font-size: 0.8rem; padding: 6px 12px;">🔍 Scan IP Otomatis</button>
+            </div>
+
+            <form id="cameraSettingsForm" style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="form-group">
+                <label>Alamat IP CCTV Tenda CH9</label>
+                <input type="text" id="settingIp" class="form-control" placeholder="Contoh: 192.168.1.100" required>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label>Port RTSP</label>
+                  <input type="number" id="settingRtspPort" class="form-control" value="554">
+                </div>
+                <div class="form-group">
+                  <label>Port ONVIF</label>
+                  <input type="number" id="settingOnvifPort" class="form-control" value="80">
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label>Username TDSEE</label>
+                  <input type="text" id="settingUsername" class="form-control" value="admin">
+                </div>
+                <div class="form-group">
+                  <label>Password TDSEE</label>
+                  <input type="password" id="settingPassword" class="form-control" placeholder="admin123456">
+                </div>
+              </div>
+
+              <button type="submit" class="btn-primary" style="margin-top: 8px;">Simpan & Terapkan Koneksi</button>
+            </form>
+
+            <div id="scanResultBox" style="display: none; margin-top: 1rem; background: rgba(0,0,0,0.4); padding: 10px; border-radius: var(--radius-sm); font-size: 0.85rem;">
+              <strong>Hasil Pemindaian Subnet:</strong>
+              <div id="scanResultList" style="margin-top: 6px;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ADD / EDIT USER MODAL -->
+  <div id="userModal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 520px;">
+      <h3 id="userModalTitle" style="margin-bottom: 1rem;">Tambah Pengguna Baru</h3>
+
+      <form id="userForm" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="hidden" id="editUserId">
+
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="inputUsername" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label>Nama Lengkap</label>
+          <input type="text" id="inputName" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="inputPassword" class="form-control" placeholder="Minimal 4 karakter">
+        </div>
+
+        <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px;">
+          <label style="font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; display: block;">
+            Hak Akses & Pembatasan:
+          </label>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem;">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="permLive" checked> Bisa Tonton Siaran Langsung (Live View)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="permPTZ"> Izin Kemudi Putar 360° (PTZ)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="permPlayback"> Buka Akses Reka Ulang (Riwayat Rekaman)
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="permDownload"> Izin Download File Video
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="permAudio" checked> Izin Mendengar Suara Mikrofon
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 8px;">
+          <label>Masa Berlaku Akun (Opsional)</label>
+          <input type="date" id="inputExpiresAt" class="form-control">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 1rem;">
+          <button type="button" id="btnCancelUserModal" class="nav-btn" style="background: rgba(255,255,255,0.05);">Batal</button>
+          <button type="submit" class="btn-primary">Simpan User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

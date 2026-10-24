@@ -1,0 +1,19 @@
+# Node dependencies
+node_modules/
+npm-debug.log*
+
+# Environment and sensitive keys
+.env
+.env.local
+.env.*.local
+
+# Executable binaries
+cloudflared.exe
+*.exe
+
+# User data & private credentials
+data/users.json
+
+# Temporary logs
+*.log
+tmp/
