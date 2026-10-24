@@ -21,9 +21,24 @@ class StorageWatchdog {
       totalDiskBytes: 0,
       totalFiles: 0,
       lastPurgedFile: null,
-      lastCheckTime: null
     };
   }
+
+  updateQuota(limitGB, storageDir) {
+    if (limitGB) {
+      const gb = parseInt(limitGB, 10);
+      if (!isNaN(gb) && gb > 0) {
+        this.maxQuotaBytes = gb * 1024 * 1024 * 1024;
+        this.targetClearBytes = this.maxQuotaBytes * 0.90;
+        this.status.quotaBytes = this.maxQuotaBytes;
+      }
+    }
+    if (storageDir) {
+      this.storageDir = storageDir;
+    }
+    console.log(`[Watchdog] Quota updated: ${this.maxQuotaBytes / (1024**3)} GB, Dir: ${this.storageDir}`);
+  }
+
 
   /**
    * Scans a folder recursively and collects all mp4 files with size and modification timestamp

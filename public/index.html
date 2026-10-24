@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tenda CH9 Dual-Lens CCTV Server</title>
+  <title>CCTV RUMAH</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,9 +12,9 @@
   <div id="loginOverlay" class="modal-overlay active">
     <div class="modal-card">
       <div style="text-align: center; margin-bottom: 1.5rem;">
-        <div class="brand-icon" style="margin: 0 auto 12px; width: 48px; height: 48px; font-size: 24px;">📹</div>
-        <h2 style="font-size: 1.3rem; margin-bottom: 4px;">Pintu Masuk CCTV Server</h2>
-        <p style="color: var(--text-muted); font-size: 0.85rem;">Tenda CH9 Dual-Lens 360° Surveillance</p>
+        <div class="brand-icon" style="margin: 0 auto 12px; width: 48px; height: 48px; font-size: 24px;">🏠</div>
+        <h2 style="font-size: 1.3rem; margin-bottom: 4px;">Pintu Masuk CCTV RUMAH</h2>
+        <p style="color: var(--text-muted); font-size: 0.85rem;">Sistem Pengawasan Mandiri Dual-Lens 360°</p>
       </div>
 
       <div id="loginError" style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.4); color: #fb7185; padding: 10px; border-radius: var(--radius-sm); font-size: 0.85rem; margin-bottom: 1rem;"></div>
@@ -38,10 +38,10 @@
     <!-- HEADER -->
     <header>
       <div class="brand">
-        <div class="brand-icon">📹</div>
+        <div class="brand-icon">🏠</div>
         <div>
-          <h1>TENDA CH9 DUAL-LENS</h1>
-          <span>Server Penyimpanan Mandiri (50 GB)</span>
+          <h1>CCTV RUMAH</h1>
+          <span>Sistem Pengawasan Mandiri</span>
         </div>
       </div>
 
@@ -79,10 +79,20 @@
               <span style="font-size: 0.75rem; background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); padding: 2px 8px; border-radius: 4px;">PTZ MOTOR</span>
             </div>
             <div class="cam-feed-container">
-              <img id="feedCam1" class="cam-feed" alt="Live Feed Camera 1">
+              <img id="feedCam1" class="cam-feed" alt="Live Feed Lensa 1">
               <div id="overlayCam1" class="feed-overlay">
                 <span style="font-size: 24px;">🔄</span>
                 <span>Menghubungkan ke Lensa 1...</span>
+              </div>
+            </div>
+            <!-- NIGHT MODE CONTROLLER (LENSA 1) -->
+            <div class="night-mode-bar">
+              <span class="nm-label">🌙 Mode Malam Lensa 1:</span>
+              <div class="nm-btn-group" data-lens="cam1">
+                <button type="button" class="nm-btn active" data-mode="smart_ai" title="AI Recognite Cahaya: IR hitam-putih saat gelap, spotlight putih menyala otomatis saat deteksi manusia">🤖 Smart AI</button>
+                <button type="button" class="nm-btn" data-mode="full_color" title="Lampu sorot LED putih menyala terus">💡 Full Color</button>
+                <button type="button" class="nm-btn" data-mode="ir_classic" title="Hanya lampu IR inframerah hitam-putih tanpa silau">🌙 Inframerah</button>
+                <button type="button" class="nm-btn" data-mode="day" title="Mode siang normal">☀️ Siang</button>
               </div>
             </div>
           </div>
@@ -97,10 +107,20 @@
               <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 2px 8px; border-radius: 4px;">SUDUT LEBAR</span>
             </div>
             <div class="cam-feed-container">
-              <img id="feedCam2" class="cam-feed" alt="Live Feed Camera 2">
+              <img id="feedCam2" class="cam-feed" alt="Live Feed Lensa 2">
               <div id="overlayCam2" class="feed-overlay">
                 <span style="font-size: 24px;">🔄</span>
                 <span>Menghubungkan ke Lensa 2...</span>
+              </div>
+            </div>
+            <!-- NIGHT MODE CONTROLLER (LENSA 2) -->
+            <div class="night-mode-bar">
+              <span class="nm-label">🌙 Mode Malam Lensa 2:</span>
+              <div class="nm-btn-group" data-lens="cam2">
+                <button type="button" class="nm-btn active" data-mode="smart_ai" title="AI Recognite Cahaya: IR hitam-putih saat gelap, spotlight putih menyala otomatis saat deteksi manusia">🤖 Smart AI</button>
+                <button type="button" class="nm-btn" data-mode="full_color" title="Lampu sorot LED putih menyala terus">💡 Full Color</button>
+                <button type="button" class="nm-btn" data-mode="ir_classic" title="Hanya lampu IR inframerah hitam-putih tanpa silau">🌙 Inframerah</button>
+                <button type="button" class="nm-btn" data-mode="day" title="Mode siang normal">☀️ Siang</button>
               </div>
             </div>
           </div>
@@ -135,12 +155,13 @@
         </div>
       </section>
 
-      <!-- TAB 2: REKA ULANG (PLAYBACK) -->
+      <!-- TAB 2: REKA ULANG (PLAYBACK WITH HOUR FILTER) -->
       <section id="tabPlayback" class="tab-content">
         <div class="playback-layout">
           <!-- SIDEBAR FILTER -->
           <div class="glass-panel filter-card">
-            <h3 style="font-size: 1rem;">Filter Rekaman</h3>
+            <h3 style="font-size: 1rem; margin-bottom: 4px;">Filter Arsip Rekaman</h3>
+            <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;">Perekaman per 1 menit siap putar instan.</p>
 
             <div class="form-group">
               <label>Pilih Lensa Kamera</label>
@@ -155,11 +176,31 @@
               <input type="date" id="playbackDateInput" class="form-control">
             </div>
 
-            <button id="btnFetchRecordings" class="btn-primary" style="padding: 8px;">Tampilkan Rekaman</button>
+            <div class="form-group">
+              <label>Filter Jam Rekaman</label>
+              <select id="playbackHourSelect" class="form-control">
+                <option value="">Semua Jam (00:00 - 23:00)</option>
+              </select>
+            </div>
 
-            <div style="margin-top: 8px;">
-              <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 8px;">
-                Daftar Segmen (15 Menitan):
+            <!-- QUICK HOUR PILLS -->
+            <div class="quick-hour-bar">
+              <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 4px;">Rentang Cepat:</span>
+              <div class="quick-hour-pills">
+                <button type="button" class="hour-pill active" data-hour="">Semua</button>
+                <button type="button" class="hour-pill" data-range="pagi">Pagi (06-11)</button>
+                <button type="button" class="hour-pill" data-range="siang">Siang (12-17)</button>
+                <button type="button" class="hour-pill" data-range="malam">Malam (18-23)</button>
+                <button type="button" class="hour-pill" data-range="dini">Dini (00-05)</button>
+              </div>
+            </div>
+
+            <button id="btnFetchRecordings" class="btn-primary" style="padding: 10px; margin-top: 8px;">🔍 Tampilkan Rekaman</button>
+
+            <div style="margin-top: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600;">Daftar Klip Video (1 Menit):</span>
+                <span id="clipsCountBadge" style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(6,182,212,0.1); padding: 2px 6px; border-radius: 4px;">0 Klip</span>
               </div>
               <div id="clipsList" class="clips-list">
                 <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 2rem 0;">
@@ -174,7 +215,7 @@
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
                 <h3 id="currentPlayingTitle" style="font-size: 1.1rem;">Pemutar Reka Ulang</h3>
-                <span id="currentPlayingSub" style="font-size: 0.8rem; color: var(--text-muted);">Pilih salah satu klip dari daftar untuk memutar.</span>
+                <span id="currentPlayingSub" style="font-size: 0.8rem; color: var(--text-muted);">Pilih salah satu klip dari daftar di samping untuk memutar.</span>
               </div>
               <div id="downloadContainer" style="display: none;">
                 <button id="btnDownloadClip" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.85rem;">
@@ -237,11 +278,11 @@
       <!-- TAB 4: PENGATURAN & STORAGE -->
       <section id="tabSettings" class="tab-content">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-          <!-- STORAGE MONITOR CARD -->
+          <!-- STORAGE MONITOR & CONFIGURATION CARD -->
           <div class="glass-panel" style="padding: 1.5rem;">
-            <h3 style="margin-bottom: 8px;">💾 Status Kapasitas Harddisk 500GB (Drive D:)</h3>
+            <h3 style="margin-bottom: 8px;">💾 Status Kapasitas & Kuota Harddisk Server</h3>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
-              Folder penyimpanan dibatasi maksimal 50 GB. Sistem FIFO akan menghapus file rekaman paling lama secara otomatis saat kuota tercapai.
+              Anda dapat bebas mengatur batas kuota harddisk (GB) di bawah ini. Sistem FIFO akan otomatis menghapus file rekaman paling lama saat kuota tercapai.
             </p>
 
             <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 0.95rem;">
@@ -252,9 +293,9 @@
               <div id="storageFill" class="storage-progress-fill" style="width: 0%;"></div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 1.25rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 1.25rem; margin-bottom: 1.25rem;">
               <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                <div style="font-size: 0.8rem; color: var(--text-muted);">Sisa Free Space Drive D:</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">Sisa Free Space Partisi Linux:</div>
                 <div id="freeDiskText" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">- GB</div>
               </div>
               <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
@@ -262,6 +303,33 @@
                 <div id="totalFilesText" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);">0 File</div>
               </div>
             </div>
+
+            <!-- STORAGE SETTINGS FORM (DYNAMIC GB) -->
+            <form id="storageSettingsForm" style="border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; flex-direction: column; gap: 12px;">
+              <h4 style="font-size: 0.95rem; color: var(--accent-cyan);">⚙️ Ubah Kuota & Durasi Penyimpanan</h4>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label>Batas Kuota Harddisk (GB)</label>
+                  <input type="number" id="settingQuotaGB" class="form-control" min="5" max="250" value="50" required>
+                </div>
+                <div class="form-group">
+                  <label>Durasi File Per Klip</label>
+                  <select id="settingSegmentMinutes" class="form-control">
+                    <option value="1" selected>1 Menit (Siap Putar Cepat)</option>
+                    <option value="5">5 Menit</option>
+                    <option value="15">15 Menit</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Folder Direktori Khusus di Server</label>
+                <input type="text" id="settingStorageDir" class="form-control" value="/home/arif/storage/CCTV_RUMAH" required>
+              </div>
+
+              <button type="submit" class="btn-primary" style="padding: 10px;">💾 Terapkan Kuota Penyimpanan</button>
+            </form>
           </div>
 
           <!-- CAMERA CONNECTION SETTINGS -->
@@ -274,7 +342,7 @@
             <form id="cameraSettingsForm" style="display: flex; flex-direction: column; gap: 12px;">
               <div class="form-group">
                 <label>Alamat IP CCTV Tenda CH9</label>
-                <input type="text" id="settingIp" class="form-control" placeholder="Contoh: 192.168.1.100" required>
+                <input type="text" id="settingIp" class="form-control" placeholder="Contoh: 192.168.1.8" required>
               </div>
 
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -295,7 +363,7 @@
                 </div>
                 <div class="form-group">
                   <label>Password TDSEE</label>
-                  <input type="password" id="settingPassword" class="form-control" placeholder="admin123456">
+                  <input type="password" id="settingPassword" class="form-control" placeholder="arifdifa0311">
                 </div>
               </div>
 

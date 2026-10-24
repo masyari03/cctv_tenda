@@ -17,11 +17,12 @@ const TendaPTZController = require('./ptz');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3080', 10);
-const STORAGE_DIR = process.env.STORAGE_DIR || 'D:\\CCTV_Storage';
+let STORAGE_DIR = process.env.STORAGE_DIR || '/home/arif/storage/CCTV_RUMAH';
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
 
 // Ensure directories exist
 if (!fs.existsSync(STORAGE_DIR)) fs.mkdirSync(STORAGE_DIR, { recursive: true });
+
 if (!fs.existsSync(path.join(__dirname, 'data'))) fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
 
 // Initialize Core Subsystems
@@ -338,41 +339,68 @@ app.get('/api/live/snapshot/:camera', authMiddleware, checkPermission('can_view_
 });
 
 // ==========================================
-// REKA ULANG & PLAYBACK ROUTES
+// REKA ULANG & PLAYBACK ROUTES (WITH HOUR FILTER)
 // ==========================================
+
+// Helper to find folder path for camera
+function getCameraFolders(cameraKey) {
+  const isCam2 = cameraKey === 'cam2';
+  const primaryName = isCam2 ? 'Lensa_2_Fixed' : 'Lensa_1_PTZ';
+  const legacyName = isCam2 ? 'Camera_2_Fixed' : 'Camera_1_PTZ';
+
+  const folders = [];
+  const p1 = path.join(STORAGE_DIR, primaryName);
+  const p2 = path.join(STORAGE_DIR, legacyName);
+  if (fs.existsSync(p1)) folders.push(p1);
+  if (fs.existsSync(p2) && p2 !== p1) folders.push(p2);
+  return folders;
+}
 
 // GET /api/recordings
 app.get('/api/recordings', authMiddleware, checkPermission('can_view_playback'), async (req, res) => {
-  const camera = req.query.camera === 'cam2' ? 'Camera_2_Fixed' : 'Camera_1_PTZ';
+  const cameraKey = req.query.camera === 'cam2' ? 'cam2' : 'cam1';
   const targetDate = req.query.date; // YYYY-MM-DD
-  const folder = path.join(STORAGE_DIR, camera);
+  const targetHour = req.query.hour; // '00' to '23' or empty for all
+  const folders = getCameraFolders(cameraKey);
 
   try {
-    if (!fs.existsSync(folder)) return res.json({ files: [] });
-
-    const entries = await fs.promises.readdir(folder);
     let files = [];
+    for (const folder of folders) {
+      if (!fs.existsSync(folder)) continue;
+      const entries = await fs.promises.readdir(folder);
 
-    for (const file of entries) {
-      if (!file.toLowerCase().endsWith('.mp4')) continue;
-      if (targetDate && !file.startsWith(targetDate)) continue;
+      for (const file of entries) {
+        if (!file.toLowerCase().endsWith('.mp4')) continue;
+        if (targetDate && !file.startsWith(targetDate)) continue;
 
-      const fullPath = path.join(folder, file);
-      const stat = await fs.promises.stat(fullPath);
+        // Filter by hour if specified (format: YYYY-MM-DD_HH-MM-SS.mp4)
+        const fileHour = file.length >= 13 ? file.slice(11, 13) : '';
+        if (targetHour !== undefined && targetHour !== '') {
+          const hourList = targetHour.split(',').map(h => h.trim());
+          if (hourList.length > 0 && !hourList.includes(fileHour)) {
+            continue;
+          }
+        }
 
-      files.push({
-        filename: file,
-        sizeBytes: stat.size,
-        sizeFormatted: (stat.size / (1024 * 1024)).toFixed(1) + ' MB',
-        date: file.slice(0, 10),
-        time: file.slice(11, 19).replace(/-/g, ':'),
-        timestamp: stat.mtimeMs
-      });
+        const fullPath = path.join(folder, file);
+        const stat = await fs.promises.stat(fullPath);
+
+        files.push({
+          filename: file,
+          folder: path.basename(folder),
+          sizeBytes: stat.size,
+          sizeFormatted: stat.size > 1024 * 1024 ? (stat.size / (1024 * 1024)).toFixed(1) + ' MB' : (stat.size / 1024).toFixed(0) + ' KB',
+          date: file.slice(0, 10),
+          time: file.slice(11, 19).replace(/-/g, ':'),
+          hour: fileHour,
+          timestamp: stat.mtimeMs
+        });
+      }
     }
 
     // Sort newest first
     files.sort((a, b) => b.timestamp - a.timestamp);
-    res.json({ files });
+    res.json({ files, count: files.length, targetDate, targetHour: targetHour || 'all' });
   } catch (err) {
     console.error('[Recordings] Error listing files:', err.message);
     res.status(500).json({ error: 'Gagal membaca riwayat rekaman' });
@@ -382,12 +410,21 @@ app.get('/api/recordings', authMiddleware, checkPermission('can_view_playback'),
 // GET /api/recordings/stream/:camera/:filename
 // HTTP 206 Partial Content video range stream
 app.get('/api/recordings/stream/:camera/:filename', authMiddleware, checkPermission('can_view_playback'), (req, res) => {
-  const camera = req.params.camera === 'cam2' ? 'Camera_2_Fixed' : 'Camera_1_PTZ';
+  const cameraKey = req.params.camera === 'cam2' ? 'cam2' : 'cam1';
   const safeFilename = path.basename(req.params.filename);
-  const filePath = path.join(STORAGE_DIR, camera, safeFilename);
+  const folders = getCameraFolders(cameraKey);
 
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File video tidak ditemukan' });
+  let filePath = null;
+  for (const f of folders) {
+    const candidate = path.join(f, safeFilename);
+    if (fs.existsSync(candidate)) {
+      filePath = candidate;
+      break;
+    }
+  }
+
+  if (!filePath || !fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File video rekaman tidak ditemukan' });
   }
 
   const stat = fs.statSync(filePath);
@@ -420,16 +457,85 @@ app.get('/api/recordings/stream/:camera/:filename', authMiddleware, checkPermiss
 
 // GET /api/recordings/download/:camera/:filename
 app.get('/api/recordings/download/:camera/:filename', authMiddleware, checkPermission('can_download_clips'), (req, res) => {
-  const camera = req.params.camera === 'cam2' ? 'Camera_2_Fixed' : 'Camera_1_PTZ';
+  const cameraKey = req.params.camera === 'cam2' ? 'cam2' : 'cam1';
   const safeFilename = path.basename(req.params.filename);
-  const filePath = path.join(STORAGE_DIR, camera, safeFilename);
+  const folders = getCameraFolders(cameraKey);
 
-  if (!fs.existsSync(filePath)) {
+  let filePath = null;
+  for (const f of folders) {
+    const candidate = path.join(f, safeFilename);
+    if (fs.existsSync(candidate)) {
+      filePath = candidate;
+      break;
+    }
+  }
+
+  if (!filePath || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File tidak ditemukan' });
   }
 
   res.download(filePath, safeFilename);
 });
+
+// ==========================================
+// NIGHT MODE & AI ILLUMINATION CONTROL (PER LENSA)
+// ==========================================
+
+// POST /api/camera/night-mode
+app.post('/api/camera/night-mode', authMiddleware, requireAdmin, async (req, res) => {
+  const { lens, mode } = req.body;
+  if (!lens || !mode) {
+    return res.status(400).json({ error: 'Lensa (cam1/cam2) dan mode wajib dipilih.' });
+  }
+
+  const result = await ptz.setNightMode(lens, mode);
+  res.json(result);
+});
+
+// GET /api/camera/night-mode
+app.get('/api/camera/night-mode', authMiddleware, (req, res) => {
+  res.json({ success: true, modes: ptz.getNightModes() });
+});
+
+// ==========================================
+// STORAGE SETTINGS CONTROLLER (DYNAMIC GB QUOTA)
+// ==========================================
+
+// POST /api/settings/update-storage
+app.post('/api/settings/update-storage', authMiddleware, requireAdmin, (req, res) => {
+  const { quotaGB, storageDir, segmentMinutes } = req.body;
+  const newQuota = parseInt(quotaGB, 10);
+  if (isNaN(newQuota) || newQuota < 1) {
+    return res.status(400).json({ error: 'Kapasitas kuota GB harus berupa angka minimal 1 GB' });
+  }
+
+  const newDir = storageDir ? storageDir.trim() : STORAGE_DIR;
+  const newSeg = segmentMinutes ? parseInt(segmentMinutes, 10) : 1;
+
+  watchdog.updateQuota(newQuota, newDir);
+  recorder.updateStorageSettings({ storageDir: newDir, segmentMinutes: newSeg });
+
+  // Persist to .env
+  try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+      let envContent = fs.readFileSync(envPath, 'utf8');
+      envContent = envContent.replace(/STORAGE_LIMIT_GB=.*/, `STORAGE_LIMIT_GB=${newQuota}`);
+      if (storageDir) envContent = envContent.replace(/STORAGE_DIR=.*/, `STORAGE_DIR=${newDir}`);
+      if (segmentMinutes) envContent = envContent.replace(/SEGMENT_MINUTES=.*/, `SEGMENT_MINUTES=${newSeg}`);
+      fs.writeFileSync(envPath, envContent, 'utf8');
+      console.log(`[Config] .env storage updated: Quota=${newQuota}GB, Dir=${newDir}, Segment=${newSeg}m`);
+    }
+  } catch (e) {
+    console.error('[Config] Failed to persist .env storage:', e.message);
+  }
+
+  res.json({
+    success: true,
+    message: `Kapasitas kuota berhasil diubah menjadi ${newQuota} GB (Penyimpanan: ${newDir})`
+  });
+});
+
 
 // ==========================================
 // SYSTEM & STORAGE MONITOR
@@ -443,19 +549,23 @@ app.get('/api/system/status', authMiddleware, async (req, res) => {
   res.json({
     recorder: recorderStatus,
     storage: {
+      storageDir: STORAGE_DIR,
       usedGB: (watchdogStatus.usedBytes / (1024 ** 3)).toFixed(2),
       quotaGB: (watchdogStatus.quotaBytes / (1024 ** 3)).toFixed(0),
       freeDiskGB: (watchdogStatus.freeDiskBytes / (1024 ** 3)).toFixed(2),
       percentage: ((watchdogStatus.usedBytes / watchdogStatus.quotaBytes) * 100).toFixed(1),
       totalFiles: watchdogStatus.totalFiles,
-      lastPurged: watchdogStatus.lastPurgedFile
+      lastPurged: watchdogStatus.lastPurgedFile,
+      segmentMinutes: recorder.segmentTimeSeconds / 60
     },
     cameraSettings: {
       ip: ptz.ip,
       port: ptz.port,
       username: ptz.username
-    }
+    },
+    nightModes: ptz.getNightModes()
   });
+
 });
 
 // POST /api/settings/update-camera

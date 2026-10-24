@@ -24,4 +24,6 @@ update_*.js
 setup_*.js
 get_*.js
 start_linux_*.js
+fix_*.js
+
 

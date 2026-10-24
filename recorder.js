@@ -28,17 +28,17 @@ const RAM_DIR = fs.existsSync('/dev/shm') ? '/dev/shm' : os.tmpdir();
 class TendaCCTVRecorder {
   constructor(config = {}) {
     this.ffmpegBinary = ffmpegPath;
-    this.storageDir = config.storageDir || process.env.STORAGE_DIR || 'D:\\CCTV_Storage';
-    this.segmentTimeSeconds = (parseInt(config.segmentMinutes || process.env.SEGMENT_MINUTES || 15, 10)) * 60;
+    this.storageDir = config.storageDir || process.env.STORAGE_DIR || '/home/arif/storage/CCTV_RUMAH';
+    this.segmentTimeSeconds = (parseInt(config.segmentMinutes || process.env.SEGMENT_MINUTES || 1, 10)) * 60;
 
     // Camera Channels
     this.cameras = {
       cam1: {
         id: 'cam1',
-        name: 'Camera 1 (Pan/Tilt 360)',
-        folderName: 'Camera_1_PTZ',
-        rtspMain: config.ch1Main || process.env.CH1_RTSP_MAIN || 'rtsp://admin:admin123456@192.168.1.8:554/ch=1&subtype=0',
-        rtspSub: config.ch1Sub || process.env.CH1_RTSP_SUB || 'rtsp://admin:admin123456@192.168.1.8:554/ch=1&subtype=1',
+        name: 'Lensa 1 (Pan/Tilt 360)',
+        folderName: 'Lensa_1_PTZ',
+        rtspMain: config.ch1Main || process.env.CH1_RTSP_MAIN || 'rtsp://admin:arifdifa0311@192.168.1.8:554/ch=1&subtype=0',
+        rtspSub: config.ch1Sub || process.env.CH1_RTSP_SUB || 'rtsp://admin:arifdifa0311@192.168.1.8:554/ch=1&subtype=1',
         process: null,
         liveProcess: null,
         liveSnapshotPath: path.join(RAM_DIR, 'cctv_cam1.jpg'),
@@ -50,10 +50,11 @@ class TendaCCTVRecorder {
       },
       cam2: {
         id: 'cam2',
-        name: 'Camera 2 (Fixed Wide-Angle)',
-        folderName: 'Camera_2_Fixed',
-        rtspMain: config.ch2Main || process.env.CH2_RTSP_MAIN || 'rtsp://admin:admin123456@192.168.1.8:554/ch=2&subtype=0',
-        rtspSub: config.ch2Sub || process.env.CH2_RTSP_SUB || 'rtsp://admin:admin123456@192.168.1.8:554/ch=2&subtype=1',
+        name: 'Lensa 2 (Sudut Lebar)',
+        folderName: 'Lensa_2_Fixed',
+        rtspMain: config.ch2Main || process.env.CH2_RTSP_MAIN || 'rtsp://admin:arifdifa0311@192.168.1.8:554/ch=2&subtype=0',
+        rtspSub: config.ch2Sub || process.env.CH2_RTSP_SUB || 'rtsp://admin:arifdifa0311@192.168.1.8:554/ch=2&subtype=1',
+
         process: null,
         liveProcess: null,
         liveSnapshotPath: path.join(RAM_DIR, 'cctv_cam2.jpg'),
@@ -91,6 +92,18 @@ class TendaCCTVRecorder {
 
     console.log(`[Recorder] Camera endpoints updated to IP ${ip}:${p} (Auth: ${authPart ? 'enabled' : 'none'})`);
   }
+
+  updateStorageSettings({ storageDir, segmentMinutes }) {
+    if (storageDir) {
+      this.storageDir = storageDir;
+      if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+    }
+    if (segmentMinutes) {
+      this.segmentTimeSeconds = parseInt(segmentMinutes, 10) * 60;
+    }
+    console.log(`[Recorder] Storage settings updated: Dir=${this.storageDir}, Segment=${this.segmentTimeSeconds}s`);
+  }
+
 
   /**
    * Spawns an FFmpeg recording process for a specific camera channel

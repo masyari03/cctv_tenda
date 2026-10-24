@@ -31,6 +31,8 @@ const ptzLockNotice = document.getElementById('ptzLockNotice');
 // Playback Elements
 const playbackCameraSelect = document.getElementById('playbackCameraSelect');
 const playbackDateInput = document.getElementById('playbackDateInput');
+const playbackHourSelect = document.getElementById('playbackHourSelect');
+const clipsCountBadge = document.getElementById('clipsCountBadge');
 const btnFetchRecordings = document.getElementById('btnFetchRecordings');
 const clipsList = document.getElementById('clipsList');
 const playbackVideo = document.getElementById('playbackVideo');
@@ -44,6 +46,10 @@ const storageText = document.getElementById('storageText');
 const storageFill = document.getElementById('storageFill');
 const freeDiskText = document.getElementById('freeDiskText');
 const totalFilesText = document.getElementById('totalFilesText');
+const storageSettingsForm = document.getElementById('storageSettingsForm');
+const settingQuotaGB = document.getElementById('settingQuotaGB');
+const settingSegmentMinutes = document.getElementById('settingSegmentMinutes');
+const settingStorageDir = document.getElementById('settingStorageDir');
 const settingIp = document.getElementById('settingIp');
 const settingRtspPort = document.getElementById('settingRtspPort');
 const settingOnvifPort = document.getElementById('settingOnvifPort');
@@ -64,8 +70,17 @@ const btnOpenAddUser = document.getElementById('btnOpenAddUser');
 const btnCancelUserModal = document.getElementById('btnCancelUserModal');
 const userForm = document.getElementById('userForm');
 
-// Initialize Today's Date
+// Initialize Today's Date and Hour Options
 playbackDateInput.value = new Date().toISOString().slice(0, 10);
+if (playbackHourSelect) {
+  for (let i = 0; i < 24; i++) {
+    const hh = String(i).padStart(2, '0');
+    const opt = document.createElement('option');
+    opt.value = hh;
+    opt.textContent = `Jam ${hh}:00 - ${hh}:59`;
+    playbackHourSelect.appendChild(opt);
+  }
+}
 
 // ==========================================
 // AUTHENTICATION & SESSION
@@ -340,25 +355,70 @@ window.addEventListener('keyup', (e) => {
 // REKA ULANG & PLAYBACK
 // ==========================================
 
+let activeHourFilter = '';
+
+// Quick Hour Range Pills
+document.querySelectorAll('.hour-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.hour-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+
+    const range = pill.getAttribute('data-range');
+    if (range === 'pagi') {
+      activeHourFilter = '06,07,08,09,10,11';
+      if (playbackHourSelect) playbackHourSelect.value = '';
+    } else if (range === 'siang') {
+      activeHourFilter = '12,13,14,15,16,17';
+      if (playbackHourSelect) playbackHourSelect.value = '';
+    } else if (range === 'malam') {
+      activeHourFilter = '18,19,20,21,22,23';
+      if (playbackHourSelect) playbackHourSelect.value = '';
+    } else if (range === 'dini') {
+      activeHourFilter = '00,01,02,03,04,05';
+      if (playbackHourSelect) playbackHourSelect.value = '';
+    } else {
+      activeHourFilter = '';
+      if (playbackHourSelect) playbackHourSelect.value = '';
+    }
+    fetchRecordings();
+  });
+});
+
+if (playbackHourSelect) {
+  playbackHourSelect.addEventListener('change', () => {
+    activeHourFilter = playbackHourSelect.value;
+    document.querySelectorAll('.hour-pill').forEach(p => {
+      p.classList.toggle('active', !activeHourFilter && p.getAttribute('data-hour') === '');
+    });
+    fetchRecordings();
+  });
+}
+
 btnFetchRecordings.addEventListener('click', fetchRecordings);
 
 async function fetchRecordings() {
   const camera = playbackCameraSelect.value;
   const date = playbackDateInput.value;
+  const hourParam = activeHourFilter ? `&hour=${encodeURIComponent(activeHourFilter)}` : '';
 
   clipsList.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Memuat arsip...</div>`;
 
   try {
-    const res = await fetch(`/api/recordings?camera=${camera}&date=${date}`);
+    const res = await fetch(`/api/recordings?camera=${camera}&date=${date}${hourParam}`);
     const data = await res.json();
 
     if (!res.ok) {
       clipsList.innerHTML = `<div style="color: #fb7185; padding: 1rem;">${data.error || 'Gagal mengambil rekaman'}</div>`;
+      if (clipsCountBadge) clipsCountBadge.textContent = '0 Klip';
       return;
     }
 
+    if (clipsCountBadge) {
+      clipsCountBadge.textContent = `${data.files.length} Klip`;
+    }
+
     if (data.files.length === 0) {
-      clipsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 2rem; text-align: center;">Tidak ada rekaman untuk tanggal ${date}.</div>`;
+      clipsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 2rem; text-align: center;">Tidak ada rekaman untuk tanggal ${date} ${activeHourFilter ? '(filter jam aktif)' : ''}.</div>`;
       return;
     }
 
@@ -388,6 +448,7 @@ async function fetchRecordings() {
 
   } catch (err) {
     clipsList.innerHTML = `<div style="color: #fb7185; padding: 1rem;">Gagal memuat file rekaman</div>`;
+    if (clipsCountBadge) clipsCountBadge.textContent = '0 Klip';
   }
 }
 
@@ -529,11 +590,110 @@ async function fetchSystemStatus() {
     freeDiskText.textContent = `${s.freeDiskGB} GB`;
     totalFilesText.textContent = `${s.totalFiles} File`;
 
+    // Populate Dynamic Storage Inputs (if user is not currently typing)
+    if (settingQuotaGB && !settingQuotaGB.matches(':focus')) {
+      settingQuotaGB.value = s.quotaGB || 50;
+    }
+    if (settingStorageDir && !settingStorageDir.matches(':focus')) {
+      settingStorageDir.value = s.storageDir || '/home/arif/storage/CCTV_RUMAH';
+    }
+    if (settingSegmentMinutes && s.segmentMinutes) {
+      settingSegmentMinutes.value = String(s.segmentMinutes);
+    }
+
     // Populate Settings Inputs
     if (data.cameraSettings) {
       settingIp.value = data.cameraSettings.ip || '';
       settingRtspPort.value = data.cameraSettings.port || 554;
       settingUsername.value = data.cameraSettings.username || 'admin';
+    }
+
+    // Sync Night Modes UI
+    if (data.nightModes) {
+      applyNightModesUI(data.nightModes);
+    }
+  } catch (e) {}
+}
+
+// Storage Settings Form (Dynamic GB Quota)
+if (storageSettingsForm) {
+  storageSettingsForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const quotaGB = settingQuotaGB.value;
+    const segmentMinutes = settingSegmentMinutes.value;
+    const storageDir = settingStorageDir.value.trim();
+
+    try {
+      const res = await fetch('/api/settings/update-storage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quotaGB, segmentMinutes, storageDir })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message || 'Pengaturan kuota & penyimpanan berhasil diperbarui!');
+        fetchSystemStatus();
+      } else {
+        alert(data.error || 'Gagal menyimpan pengaturan penyimpanan.');
+      }
+    } catch (err) {
+      alert('Koneksi server gagal saat memperbarui kuota.');
+    }
+  });
+}
+
+// Per-Lens Night Mode Controls
+function initNightModeButtons() {
+  document.querySelectorAll('.nm-btn-group').forEach(group => {
+    const lens = group.getAttribute('data-lens');
+    group.querySelectorAll('.nm-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mode = btn.getAttribute('data-mode');
+        // Visual optimistic feedback
+        group.querySelectorAll('.nm-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        try {
+          const res = await fetch('/api/camera/night-mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lens, mode })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            alert('Gagal mengubah mode malam: ' + (data.error || 'Terjadi kesalahan'));
+            loadNightModes(); // revert
+          }
+        } catch (err) {
+          alert('Koneksi server gagal saat mengubah mode malam.');
+          loadNightModes(); // revert
+        }
+      });
+    });
+  });
+}
+
+function applyNightModesUI(modes) {
+  ['cam1', 'cam2'].forEach(lens => {
+    const activeMode = modes[lens];
+    if (activeMode) {
+      const group = document.querySelector(`.nm-btn-group[data-lens="${lens}"]`);
+      if (group) {
+        group.querySelectorAll('.nm-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.getAttribute('data-mode') === activeMode);
+        });
+      }
+    }
+  });
+}
+
+async function loadNightModes() {
+  try {
+    const res = await fetch('/api/camera/night-mode');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.modes) {
+      applyNightModesUI(data.modes);
     }
   } catch (e) {}
 }
@@ -605,4 +765,6 @@ btnScanLan.addEventListener('click', async () => {
 });
 
 // Kickoff
+initNightModeButtons();
+loadNightModes();
 checkSession();
