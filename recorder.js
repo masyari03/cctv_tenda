@@ -125,12 +125,21 @@ class TendaCCTVRecorder {
 
     const outputPattern = path.join(outputFolder, '%Y-%m-%d_%H-%M-%S.mp4');
 
+    // Determine stream URL: for cam2, fallback from ch=2 to ch=1?subtype=1 if needed
+    let streamUrl = cam.rtspMain;
+    if (camKey === 'cam2' && streamUrl.includes('ch=2')) {
+      streamUrl = cam.rtspSub && !cam.rtspSub.includes('ch=2') ? cam.rtspSub : streamUrl.replace('ch=2', 'ch=1');
+    }
+
     // High performance stream copy with audio resample (16kHz AAC avoids clipping/crash on alaw 8kHz)
+    // AND simultaneous RAM live snapshot (MJPEG 2 fps) with atomic overwrite (zero socket spikes)
     const args = [
       '-hide_banner',
       '-loglevel', 'warning',
+      '-y',
       '-rtsp_transport', 'tcp',
-      '-i', cam.rtspMain,
+      '-i', streamUrl,
+      // Output 1: Segmented MP4 Recording
       '-c:v', 'copy',
       '-c:a', 'aac',
       '-ar', '16000',
@@ -140,7 +149,13 @@ class TendaCCTVRecorder {
       '-segment_format', 'mp4',
       '-reset_timestamps', '1',
       '-strftime', '1',
-      outputPattern
+      outputPattern,
+      // Output 2: RAM Live Snapshot at 2 fps
+      '-vf', 'fps=2',
+      '-q:v', camKey === 'cam1' ? '3' : '4',
+      '-update', '1',
+      '-atomic_writing', '1',
+      cam.liveSnapshotPath
     ];
 
     console.log(`[Recorder] Launching recording for ${cam.name} using ${path.basename(this.ffmpegBinary)}`);
@@ -265,13 +280,11 @@ class TendaCCTVRecorder {
   }
 
   /**
-   * Starts both recording and live streaming workers for all cameras
+   * Starts unified recording and live streaming workers for all cameras (zero socket spikes)
    */
   startAll() {
     this.startCameraRecording('cam1');
     this.startCameraRecording('cam2');
-    this.startCameraLiveWorker('cam1');
-    this.startCameraLiveWorker('cam2');
   }
 
   /**
