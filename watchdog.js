@@ -61,16 +61,33 @@ class StorageWatchdog {
   }
 
   /**
-   * Retrieves Drive D remaining free space using PowerShell
+   * Retrieves remaining free disk space (Cross-platform: Linux df / Node statfs / Windows)
    */
-  getDriveFreeSpace(driveLetter = 'D') {
+  async getDriveFreeSpace() {
+    try {
+      if (fs.promises && fs.promises.statfs) {
+        const stats = await fs.promises.statfs(this.storageDir);
+        return stats.bavail * stats.bsize;
+      }
+    } catch (e) {}
+
+    if (process.platform === 'win32') {
+      return new Promise((resolve) => {
+        exec('powershell -NoProfile -Command "Get-PSDrive D | Select-Object -ExpandProperty Free"', { timeout: 4000 }, (err, stdout) => {
+          if (!err && stdout && !isNaN(parseInt(stdout.trim(), 10))) {
+            resolve(parseInt(stdout.trim(), 10));
+          } else {
+            resolve(50 * 1024 * 1024 * 1024);
+          }
+        });
+      });
+    }
+
     return new Promise((resolve) => {
-      const cmd = `powershell -NoProfile -Command "Get-PSDrive ${driveLetter} | Select-Object -ExpandProperty Free"`;
-      exec(cmd, { timeout: 5000 }, (err, stdout) => {
+      exec(`df -B1 "${this.storageDir}" 2>/dev/null | tail -n 1 | awk '{print $4}'`, { timeout: 4000 }, (err, stdout) => {
         if (!err && stdout && !isNaN(parseInt(stdout.trim(), 10))) {
           resolve(parseInt(stdout.trim(), 10));
         } else {
-          // Fallback safe estimate
           resolve(50 * 1024 * 1024 * 1024);
         }
       });
