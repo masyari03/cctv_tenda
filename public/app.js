@@ -70,8 +70,17 @@ const btnOpenAddUser = document.getElementById('btnOpenAddUser');
 const btnCancelUserModal = document.getElementById('btnCancelUserModal');
 const userForm = document.getElementById('userForm');
 
+// Helper for local timezone date (e.g. YYYY-MM-DD in WIB / local browser)
+function getLocalDateString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Initialize Today's Date and Hour Options
-playbackDateInput.value = new Date().toISOString().slice(0, 10);
+playbackDateInput.value = getLocalDateString();
 if (playbackHourSelect) {
   for (let i = 0; i < 24; i++) {
     const hh = String(i).padStart(2, '0');
@@ -588,14 +597,14 @@ async function fetchSystemStatus() {
     storageText.textContent = `${s.usedGB} GB / ${s.quotaGB} GB (${s.percentage}%)`;
     storageFill.style.width = `${Math.min(parseFloat(s.percentage), 100)}%`;
     freeDiskText.textContent = `${s.freeDiskGB} GB`;
-    totalFilesText.textContent = `${s.totalFiles} File`;
+    totalFilesText.textContent = `${s.totalFiles} File (Auto-Record Aktif)`;
 
     // Populate Dynamic Storage Inputs (if user is not currently typing)
     if (settingQuotaGB && !settingQuotaGB.matches(':focus')) {
       settingQuotaGB.value = s.quotaGB || 50;
     }
     if (settingStorageDir && !settingStorageDir.matches(':focus')) {
-      settingStorageDir.value = s.storageDir || '/home/arif/storage/CCTV_RUMAH';
+      settingStorageDir.value = s.storageDir || '/mnt/data/CCTV_RUMAH';
     }
     if (settingSegmentMinutes && s.segmentMinutes) {
       settingSegmentMinutes.value = String(s.segmentMinutes);

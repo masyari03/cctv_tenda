@@ -76,7 +76,10 @@
                 <span class="live-indicator"></span>
                 <span>Lensa 1: Pan / Tilt 360°</span>
               </div>
-              <span style="font-size: 0.75rem; background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); padding: 2px 8px; border-radius: 4px;">PTZ MOTOR</span>
+              <div class="cam-badges">
+                <span class="rec-badge" title="Auto-Record aktif 1 menit/klip ke HDD"><span class="rec-dot"></span>REC 1M</span>
+                <span class="lens-tag tag-cyan">PTZ MOTOR</span>
+              </div>
             </div>
             <div class="cam-feed-container">
               <img id="feedCam1" class="cam-feed" alt="Live Feed Lensa 1">
@@ -104,7 +107,10 @@
                 <span class="live-indicator"></span>
                 <span>Lensa 2: Fixed Wide-Angle</span>
               </div>
-              <span style="font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); padding: 2px 8px; border-radius: 4px;">SUDUT LEBAR</span>
+              <div class="cam-badges">
+                <span class="rec-badge" title="Auto-Record aktif 1 menit/klip ke HDD"><span class="rec-dot"></span>REC 1M</span>
+                <span class="lens-tag tag-blue">SUDUT LEBAR</span>
+              </div>
             </div>
             <div class="cam-feed-container">
               <img id="feedCam2" class="cam-feed" alt="Live Feed Lensa 2">
@@ -257,27 +263,29 @@
             <button id="btnOpenAddUser" class="btn-primary">+ Tambah Pengguna Baru</button>
           </div>
 
-          <table class="users-table">
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Nama</th>
-                <th>Peran</th>
-                <th>Hak Akses Khusus</th>
-                <th>Masa Berlaku</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <!-- Loaded via app.js -->
-            </tbody>
-          </table>
+          <div class="table-responsive" style="margin-top: 1.25rem;">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Nama</th>
+                  <th>Peran</th>
+                  <th>Hak Akses Khusus</th>
+                  <th>Masa Berlaku</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                <!-- Loaded via app.js -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 
       <!-- TAB 4: PENGATURAN & STORAGE -->
       <section id="tabSettings" class="tab-content">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+        <div class="settings-grid">
           <!-- STORAGE MONITOR & CONFIGURATION CARD -->
           <div class="glass-panel" style="padding: 1.5rem;">
             <h3 style="margin-bottom: 8px;">💾 Status Kapasitas & Kuota Harddisk Server</h3>
@@ -293,14 +301,16 @@
               <div id="storageFill" class="storage-progress-fill" style="width: 0%;"></div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 1.25rem; margin-bottom: 1.25rem;">
-              <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                <div style="font-size: 0.8rem; color: var(--text-muted);">Sisa Free Space Partisi Linux:</div>
-                <div id="freeDiskText" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-cyan);">- GB</div>
+            <div class="storage-stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Sisa Free Space Partisi HDD:</div>
+                <div id="freeDiskText" class="stat-value text-cyan">- GB</div>
+                <div class="stat-sub">/dev/sda5 (276.8 GB)</div>
               </div>
-              <div style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                <div style="font-size: 0.8rem; color: var(--text-muted);">Total File Rekaman:</div>
-                <div id="totalFilesText" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-emerald);">0 File</div>
+              <div class="stat-card">
+                <div class="stat-label">Total File Rekaman Aktif:</div>
+                <div id="totalFilesText" class="stat-value text-emerald">0 File</div>
+                <div class="stat-sub">Auto-Record Berjalan</div>
               </div>
             </div>
 
@@ -308,7 +318,7 @@
             <form id="storageSettingsForm" style="border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; flex-direction: column; gap: 12px;">
               <h4 style="font-size: 0.95rem; color: var(--accent-cyan);">⚙️ Ubah Kuota & Durasi Penyimpanan</h4>
               
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-row-2">
                 <div class="form-group">
                   <label>Batas Kuota Harddisk (GB)</label>
                   <input type="number" id="settingQuotaGB" class="form-control" min="5" max="250" value="50" required>
@@ -324,8 +334,9 @@
               </div>
 
               <div class="form-group">
-                <label>Folder Direktori Khusus di Server</label>
-                <input type="text" id="settingStorageDir" class="form-control" value="/home/arif/storage/CCTV_RUMAH" required>
+                <label>Folder Direktori Harddisk di Laptop Server (/mnt/data)</label>
+                <input type="text" id="settingStorageDir" class="form-control" value="/mnt/data/CCTV_RUMAH" required>
+                <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">📁 Mengarah langsung ke partisi harddisk 276.8 GB (/dev/sda5) di laptop server.</span>
               </div>
 
               <button type="submit" class="btn-primary" style="padding: 10px;">💾 Terapkan Kuota Penyimpanan</button>

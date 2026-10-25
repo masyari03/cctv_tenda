@@ -8,7 +8,7 @@ const { exec } = require('child_process');
 
 class StorageWatchdog {
   constructor(options = {}) {
-    this.storageDir = options.storageDir || process.env.STORAGE_DIR || 'D:\\CCTV_Storage';
+    this.storageDir = options.storageDir || process.env.STORAGE_DIR || '/mnt/data/CCTV_RUMAH';
     this.maxQuotaBytes = (parseInt(options.limitGB || process.env.STORAGE_LIMIT_GB || 50, 10)) * 1024 * 1024 * 1024;
     this.minFreeSpaceBytes = (parseInt(options.minFreeGB || process.env.MIN_FREE_SPACE_GB || 15, 10)) * 1024 * 1024 * 1024;
     this.targetClearBytes = this.maxQuotaBytes * 0.90; // purge until 90% (45GB) to prevent thrashing
@@ -81,8 +81,11 @@ class StorageWatchdog {
   async getDriveFreeSpace() {
     try {
       if (fs.promises && fs.promises.statfs) {
-        const stats = await fs.promises.statfs(this.storageDir);
-        return stats.bavail * stats.bsize;
+        const targetDir = fs.existsSync(this.storageDir) ? this.storageDir : '/mnt/data';
+        if (fs.existsSync(targetDir)) {
+          const stats = await fs.promises.statfs(targetDir);
+          return stats.bavail * stats.bsize;
+        }
       }
     } catch (e) {}
 
@@ -99,7 +102,8 @@ class StorageWatchdog {
     }
 
     return new Promise((resolve) => {
-      exec(`df -B1 "${this.storageDir}" 2>/dev/null | tail -n 1 | awk '{print $4}'`, { timeout: 4000 }, (err, stdout) => {
+      const targetDir = fs.existsSync(this.storageDir) ? this.storageDir : '/mnt/data';
+      exec(`df -B1 "${targetDir}" 2>/dev/null | tail -n 1 | awk '{print $4}'`, { timeout: 4000 }, (err, stdout) => {
         if (!err && stdout && !isNaN(parseInt(stdout.trim(), 10))) {
           resolve(parseInt(stdout.trim(), 10));
         } else {
@@ -117,15 +121,11 @@ class StorageWatchdog {
     this.isPurging = true;
 
     try {
-      const cam1Dir = path.join(this.storageDir, 'Camera_1_PTZ');
-      const cam2Dir = path.join(this.storageDir, 'Camera_2_Fixed');
-
-      const files1 = await this.scanDirectory(cam1Dir);
-      const files2 = await this.scanDirectory(cam2Dir);
-      const allFiles = [...files1, ...files2];
+      // Recursively scan all recording folders inside this.storageDir (Lensa_1_PTZ, Lensa_2_Fixed, etc.)
+      const allFiles = await this.scanDirectory(this.storageDir);
 
       const totalUsedBytes = allFiles.reduce((acc, f) => acc + f.size, 0);
-      const freeDiskBytes = await this.getDriveFreeSpace('D');
+      const freeDiskBytes = await this.getDriveFreeSpace();
 
       this.status = {
         usedBytes: totalUsedBytes,

@@ -28,7 +28,7 @@ const RAM_DIR = fs.existsSync('/dev/shm') ? '/dev/shm' : os.tmpdir();
 class TendaCCTVRecorder {
   constructor(config = {}) {
     this.ffmpegBinary = ffmpegPath;
-    this.storageDir = config.storageDir || process.env.STORAGE_DIR || '/home/arif/storage/CCTV_RUMAH';
+    this.storageDir = config.storageDir || process.env.STORAGE_DIR || '/mnt/data/CCTV_RUMAH';
     this.segmentTimeSeconds = (parseInt(config.segmentMinutes || process.env.SEGMENT_MINUTES || 1, 10)) * 60;
 
     // Camera Channels

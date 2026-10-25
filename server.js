@@ -17,7 +17,7 @@ const TendaPTZController = require('./ptz');
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3080', 10);
-let STORAGE_DIR = process.env.STORAGE_DIR || '/home/arif/storage/CCTV_RUMAH';
+let STORAGE_DIR = process.env.STORAGE_DIR || '/mnt/data/CCTV_RUMAH';
 const USERS_FILE = path.join(__dirname, 'data', 'users.json');
 
 // Ensure directories exist
@@ -512,8 +512,17 @@ app.post('/api/settings/update-storage', authMiddleware, requireAdmin, (req, res
   const newDir = storageDir ? storageDir.trim() : STORAGE_DIR;
   const newSeg = segmentMinutes ? parseInt(segmentMinutes, 10) : 1;
 
+  const dirChanged = newDir !== STORAGE_DIR;
+  const segChanged = newSeg !== (recorder.segmentTimeSeconds / 60);
+  STORAGE_DIR = newDir;
+
   watchdog.updateQuota(newQuota, newDir);
   recorder.updateStorageSettings({ storageDir: newDir, segmentMinutes: newSeg });
+
+  // If storage directory or segment length changed, restart recorder to begin writing to new location
+  if (dirChanged || segChanged) {
+    recorder.startAll();
+  }
 
   // Persist to .env
   try {
