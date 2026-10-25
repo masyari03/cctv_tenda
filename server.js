@@ -386,6 +386,11 @@ app.get('/api/recordings', authMiddleware, checkPermission('can_view_playback'),
           const fullPath = path.join(folder, file);
           const stat = await fs.promises.stat(fullPath);
 
+          // Exclude active recordings currently being written by FFmpeg (incomplete/under 100KB or modified within 8 seconds)
+          if (stat.size < 100000 && (Date.now() - stat.mtimeMs < 10000)) {
+            continue;
+          }
+
           list.push({
             camera: cameraKey,
             filename: file,
