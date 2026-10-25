@@ -125,11 +125,8 @@ class TendaCCTVRecorder {
 
     const outputPattern = path.join(outputFolder, '%Y-%m-%d_%H-%M-%S.mp4');
 
-    // Determine stream URL: for cam2, fallback from ch=2 to ch=1?subtype=1 if needed
-    let streamUrl = cam.rtspMain;
-    if (camKey === 'cam2' && streamUrl.includes('ch=2')) {
-      streamUrl = cam.rtspSub && !cam.rtspSub.includes('ch=2') ? cam.rtspSub : streamUrl.replace('ch=2', 'ch=1');
-    }
+    // Stream URL directly from camera configuration (cam1 -> ch=1 PTZ, cam2 -> ch=2 Fixed)
+    const streamUrl = cam.rtspMain;
 
     // High performance stream copy with audio resample (16kHz AAC avoids clipping/crash on alaw 8kHz)
     // AND simultaneous RAM live snapshot (MJPEG 2 fps) with atomic overwrite (zero socket spikes)

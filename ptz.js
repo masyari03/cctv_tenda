@@ -3,6 +3,7 @@
  * Handles 360 Pan/Tilt motor steering via ONVIF SOAP protocol
  */
 const http = require('http');
+const https = require('https');
 const crypto = require('crypto');
 
 class TendaPTZController {
@@ -19,6 +20,137 @@ class TendaPTZController {
     if (port) this.port = parseInt(port, 10);
     if (username) this.username = username;
     if (password) this.password = password;
+  }
+
+  /**
+   * Automatically activates Channel 2 (Fixed Lens) in the camera's native firmware via RPC2
+   */
+  async ensureDualLensEnabled() {
+    return new Promise((resolve) => {
+      try {
+        const postData = JSON.stringify({
+          method: 'global.login',
+          params: {
+            username: this.username,
+            password: Buffer.from(this.password).toString('base64'),
+            clientType: 'Web3.0'
+          },
+          id: 1
+        });
+
+        const req = https.request({
+          hostname: this.ip,
+          port: 443,
+          path: '/RPC2',
+          method: 'POST',
+          rejectUnauthorized: false,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData)
+          },
+          timeout: 4000
+        }, (res) => {
+          let data = '';
+          res.on('data', d => data += d);
+          res.on('end', async () => {
+            const rawCookie = res.headers['set-cookie'];
+            const cookie = rawCookie && rawCookie[0] ? rawCookie[0].split(';')[0] : '';
+            if (!cookie) {
+              console.warn('[CameraRPC2] Login failed, could not verify dual-lens status');
+              return resolve(false);
+            }
+
+            // Query current Encode config
+            const getEncodeData = JSON.stringify({
+              method: 'configManager.getConfig',
+              params: { name: 'Encode' },
+              id: 2
+            });
+
+            const getReq = https.request({
+              hostname: this.ip,
+              port: 443,
+              path: '/RPC2',
+              method: 'POST',
+              rejectUnauthorized: false,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': cookie,
+                'Content-Length': Buffer.byteLength(getEncodeData)
+              },
+              timeout: 4000
+            }, (res2) => {
+              let data2 = '';
+              res2.on('data', d => data2 += d);
+              res2.on('end', () => {
+                try {
+                  const json = JSON.parse(data2);
+                  const table = json.params?.table;
+                  if (!table || !table.MainFormat) return resolve(false);
+
+                  if (table.MainFormat[1] && table.MainFormat[1].VideoEnable === true) {
+                    console.log('[CameraRPC2] Channel 2 (Fixed Lens) encoder is already ACTIVE.');
+                    return resolve(true);
+                  }
+
+                  // Enable MainFormat[1].VideoEnable
+                  table.MainFormat[1].VideoEnable = true;
+                  const setEncodeData = JSON.stringify({
+                    method: 'configManager.setConfig',
+                    params: { name: 'Encode', table },
+                    id: 3
+                  });
+
+                  const setReq = https.request({
+                    hostname: this.ip,
+                    port: 443,
+                    path: '/RPC2',
+                    method: 'POST',
+                    rejectUnauthorized: false,
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Cookie': cookie,
+                      'Content-Length': Buffer.byteLength(setEncodeData)
+                    },
+                    timeout: 4000
+                  }, (res3) => {
+                    let data3 = '';
+                    res3.on('data', d => data3 += d);
+                    res3.on('end', () => {
+                      console.log('[CameraRPC2] Channel 2 (Fixed Lens) encoder successfully activated via RPC2.');
+                      resolve(true);
+                    });
+                  });
+                  setReq.on('error', () => resolve(false));
+                  setReq.write(setEncodeData);
+                  setReq.end();
+
+                } catch (e) {
+                  resolve(false);
+                }
+              });
+            });
+            getReq.on('error', () => resolve(false));
+            getReq.write(getEncodeData);
+            getReq.end();
+          });
+        });
+
+        req.on('error', (e) => {
+          console.warn('[CameraRPC2] Failed to reach camera HTTPS on port 443:', e.message);
+          resolve(false);
+        });
+        req.on('timeout', () => {
+          req.destroy();
+          resolve(false);
+        });
+        req.write(postData);
+        req.end();
+
+      } catch (err) {
+        resolve(false);
+      }
+    });
   }
 
   /**

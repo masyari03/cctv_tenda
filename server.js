@@ -651,11 +651,18 @@ app.use((req, res) => {
 });
 
 // Start Server & Subsystems
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`=======================================================`);
   console.log(`🚀 TENDA CH9 CCTV SERVER RUNNING ON http://localhost:${PORT}`);
   console.log(`📁 Storage: ${STORAGE_DIR} (Quota: ${process.env.STORAGE_LIMIT_GB || 50} GB)`);
   console.log(`=======================================================`);
+
+  // Auto-provision Channel 2 (Fixed lens) in camera firmware via RPC2
+  try {
+    await ptz.ensureDualLensEnabled();
+  } catch (err) {
+    console.warn('[Server] Note: ensureDualLensEnabled warning:', err.message);
+  }
 
   // Start background watchdog & recorder
   watchdog.startScheduler(300000); // every 5 mins
