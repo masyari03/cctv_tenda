@@ -843,12 +843,21 @@ window.addEventListener('keydown', (e) => {
 // USER MANAGEMENT (ADMIN ONLY)
 // ==========================================
 
+const checkPlaybackTimeRestricted = document.getElementById('checkPlaybackTimeRestricted');
+const playbackTimeInputs = document.getElementById('playbackTimeInputs');
+if (checkPlaybackTimeRestricted && playbackTimeInputs) {
+  checkPlaybackTimeRestricted.addEventListener('change', () => {
+    playbackTimeInputs.style.display = checkPlaybackTimeRestricted.checked ? 'flex' : 'none';
+  });
+}
+
 async function fetchUsersList() {
   try {
     const res = await fetch('/api/users');
     const data = await res.json();
     if (!res.ok) return;
 
+    let cachedUsers = data.users;
     usersTableBody.innerHTML = '';
     data.users.forEach(u => {
       const p = u.permissions || {};
@@ -863,25 +872,99 @@ async function fetchUsersList() {
         <span class="badge-perm ${p.can_hear_audio ? 'badge-on' : 'badge-off'}">Audio</span>
       `;
 
+      let scheduleBadge = '<span style="color: var(--accent-emerald); font-size: 0.78rem;">Bebas 24 Jam</span>';
+      if (p.can_view_playback && u.playback_time_restricted) {
+        const dateRange = (u.playback_start_date && u.playback_end_date)
+          ? `${u.playback_start_date} s/d ${u.playback_end_date}`
+          : (u.playback_start_date ? `Mulai ${u.playback_start_date}` : (u.playback_end_date ? `Sampai ${u.playback_end_date}` : 'Semua Hari'));
+        const hourRange = (u.playback_start_hour && u.playback_end_hour)
+          ? `${u.playback_start_hour} - ${u.playback_end_hour} WIB`
+          : '24 Jam';
+        scheduleBadge = `
+          <div style="font-size: 0.72rem; line-height: 1.35;">
+            <span style="color: var(--accent-cyan); font-weight: 600;">📅 ${dateRange}</span><br>
+            <span style="color: var(--accent-amber); font-weight: 600;">⏰ ${hourRange}</span>
+          </div>
+        `;
+      } else if (!p.can_view_playback) {
+        scheduleBadge = '<span style="color: var(--text-muted); font-size: 0.75rem;">Tidak Ada Izin</span>';
+      }
+
       tr.innerHTML = `
         <td style="font-weight: 600;">${u.username}</td>
         <td>${u.name}</td>
         <td><span style="text-transform: uppercase; font-size: 0.8rem; color: ${u.role === 'admin' ? 'var(--accent-cyan)' : 'var(--text-secondary)'}">${u.role}</span></td>
         <td>${permBadges}</td>
+        <td>${scheduleBadge}</td>
         <td>${u.expiresAt ? new Date(u.expiresAt).toLocaleDateString() : 'Selamanya'}</td>
-        <td>
-          ${!isMe ? `<button onclick="deleteUser('${u.id}', '${u.username}')" class="btn-logout" style="padding: 4px 8px; font-size: 0.75rem;">Hapus</button>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">(Anda)</span>'}
+        <td style="display: flex; gap: 6px; align-items: center;">
+          ${!isMe ? `
+            <button onclick="editUser('${u.id}')" style="background: rgba(34, 211, 238, 0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); padding: 4px 8px; border-radius: var(--radius-sm); font-size: 0.75rem; cursor: pointer;">Edit</button>
+            <button onclick="deleteUser('${u.id}', '${u.username}')" class="btn-logout" style="padding: 4px 8px; font-size: 0.75rem;">Hapus</button>
+          ` : '<span style="color: var(--text-muted); font-size: 0.8rem;">(Anda)</span>'}
         </td>
       `;
       usersTableBody.appendChild(tr);
     });
+
+    window._usersData = cachedUsers;
   } catch (e) {}
 }
 
 btnOpenAddUser.addEventListener('click', () => {
   userForm.reset();
+  document.getElementById('editUserId').value = '';
+  document.getElementById('userModalTitle').textContent = 'Tambah Pengguna Baru';
+  document.getElementById('inputUsername').disabled = false;
+  document.getElementById('inputPassword').placeholder = 'Minimal 4 karakter';
+  document.getElementById('inputPassword').required = true;
+  if (playbackTimeInputs) playbackTimeInputs.style.display = 'none';
+  if (checkPlaybackTimeRestricted) checkPlaybackTimeRestricted.checked = false;
   userModal.classList.add('active');
 });
+
+window.editUser = function(id) {
+  const user = (window._usersData || []).find(u => u.id === id);
+  if (!user) return;
+
+  document.getElementById('editUserId').value = user.id;
+  document.getElementById('userModalTitle').textContent = `Ubah Izin User: ${user.username}`;
+  document.getElementById('inputUsername').value = user.username;
+  document.getElementById('inputUsername').disabled = true;
+  document.getElementById('inputName').value = user.name || '';
+  document.getElementById('inputPassword').value = '';
+  document.getElementById('inputPassword').placeholder = 'Kosongkan jika password tidak diubah';
+  document.getElementById('inputPassword').required = false;
+  document.getElementById('inputExpiresAt').value = user.expiresAt ? user.expiresAt.slice(0, 10) : '';
+
+  const p = user.permissions || {};
+  document.getElementById('permLive').checked = p.can_view_live === true;
+  document.getElementById('permPTZ').checked = p.can_control_ptz === true;
+  document.getElementById('permPlayback').checked = p.can_view_playback === true;
+  document.getElementById('permDownload').checked = p.can_download_clips === true;
+  document.getElementById('permAudio').checked = p.can_hear_audio === true;
+
+  if (checkPlaybackTimeRestricted) {
+    checkPlaybackTimeRestricted.checked = user.playback_time_restricted === true;
+    if (playbackTimeInputs) {
+      playbackTimeInputs.style.display = user.playback_time_restricted ? 'flex' : 'none';
+    }
+  }
+  if (document.getElementById('inputPlaybackStartDate')) {
+    document.getElementById('inputPlaybackStartDate').value = user.playback_start_date || '';
+  }
+  if (document.getElementById('inputPlaybackEndDate')) {
+    document.getElementById('inputPlaybackEndDate').value = user.playback_end_date || '';
+  }
+  if (document.getElementById('inputPlaybackStartHour')) {
+    document.getElementById('inputPlaybackStartHour').value = user.playback_start_hour || '08:00';
+  }
+  if (document.getElementById('inputPlaybackEndHour')) {
+    document.getElementById('inputPlaybackEndHour').value = user.playback_end_hour || '17:00';
+  }
+
+  userModal.classList.add('active');
+};
 
 btnCancelUserModal.addEventListener('click', () => {
   userModal.classList.remove('active');
@@ -889,6 +972,7 @@ btnCancelUserModal.addEventListener('click', () => {
 
 userForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const editId = document.getElementById('editUserId').value;
   const username = document.getElementById('inputUsername').value;
   const name = document.getElementById('inputName').value;
   const password = document.getElementById('inputPassword').value;
@@ -902,18 +986,46 @@ userForm.addEventListener('submit', async (e) => {
     can_hear_audio: document.getElementById('permAudio').checked
   };
 
+  const playback_time_restricted = checkPlaybackTimeRestricted ? checkPlaybackTimeRestricted.checked : false;
+  const playback_start_date = document.getElementById('inputPlaybackStartDate')?.value || null;
+  const playback_end_date = document.getElementById('inputPlaybackEndDate')?.value || null;
+  const playback_start_hour = document.getElementById('inputPlaybackStartHour')?.value || null;
+  const playback_end_hour = document.getElementById('inputPlaybackEndHour')?.value || null;
+
+  const payload = {
+    name,
+    permissions,
+    expiresAt,
+    playback_time_restricted,
+    playback_start_date,
+    playback_end_date,
+    playback_start_hour,
+    playback_end_hour
+  };
+
+  if (!editId) {
+    payload.username = username;
+    payload.password = password;
+    payload.role = 'user';
+  } else if (password) {
+    payload.password = password;
+  }
+
   try {
-    const res = await fetch('/api/users', {
-      method: 'POST',
+    const url = editId ? `/api/users/${editId}` : '/api/users';
+    const method = editId ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method: method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, name, password, role: 'user', permissions, expiresAt })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
     if (res.ok) {
       userModal.classList.remove('active');
       fetchUsersList();
     } else {
-      alert(data.error || 'Gagal menambah user');
+      alert(data.error || 'Gagal menyimpan data user');
     }
   } catch (err) {
     alert('Koneksi server gagal');

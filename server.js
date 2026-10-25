@@ -110,10 +110,47 @@ function requireAdmin(req, res, next) {
 
 function checkPermission(permKey) {
   return (req, res, next) => {
-    if (req.user.role === 'admin' || (req.user.permissions && req.user.permissions[permKey] === true)) {
+    if (req.user.role === 'admin') {
       return next();
     }
-    return res.status(403).json({ error: `Akses dibatasi. Anda tidak memiliki izin [${permKey}]. Hubungi admin.` });
+
+    if (!req.user.permissions || req.user.permissions[permKey] !== true) {
+      return res.status(403).json({ error: `Akses dibatasi. Anda tidak memiliki izin [${permKey}]. Hubungi admin.` });
+    }
+
+    // Time-based playback restriction enforcement
+    if (permKey === 'can_view_playback' && req.user.playback_time_restricted === true) {
+      const now = new Date();
+      // Calculate local time in WIB (UTC+7)
+      const wibDate = new Date(now.getTime() + (7 * 3600 * 1000));
+      const todayStr = wibDate.toISOString().slice(0, 10); // YYYY-MM-DD
+      const curHour = wibDate.getUTCHours();
+      const curMin = wibDate.getUTCMinutes();
+      const curTimeStr = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')}`; // HH:MM
+
+      // Date Range Validation
+      if (req.user.playback_start_date && todayStr < req.user.playback_start_date) {
+        return res.status(403).json({
+          error: `Izin akses reka ulang belum aktif. Berlaku mulai tanggal ${req.user.playback_start_date}.`
+        });
+      }
+      if (req.user.playback_end_date && todayStr > req.user.playback_end_date) {
+        return res.status(403).json({
+          error: `Izin akses reka ulang telah berakhir pada tanggal ${req.user.playback_end_date}.`
+        });
+      }
+
+      // Allowed Hours Validation (HH:MM to HH:MM)
+      if (req.user.playback_start_hour && req.user.playback_end_hour) {
+        if (curTimeStr < req.user.playback_start_hour || curTimeStr > req.user.playback_end_hour) {
+          return res.status(403).json({
+            error: `Akses reka ulang saat ini terkunci. Izin buka: pukul ${req.user.playback_start_hour} - ${req.user.playback_end_hour} WIB (Waktu sekarang: ${curTimeStr} WIB).`
+          });
+        }
+      }
+    }
+
+    next();
   };
 }
 
@@ -180,7 +217,12 @@ app.post('/api/auth/login', async (req, res) => {
       username: user.username,
       name: user.name,
       role: user.role,
-      permissions: user.permissions
+      permissions: user.permissions,
+      playback_time_restricted: user.playback_time_restricted || false,
+      playback_start_date: user.playback_start_date || null,
+      playback_end_date: user.playback_end_date || null,
+      playback_start_hour: user.playback_start_hour || null,
+      playback_end_hour: user.playback_end_hour || null
     }
   });
 });
@@ -201,7 +243,12 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
       username: req.user.username,
       name: req.user.name,
       role: req.user.role,
-      permissions: req.user.permissions
+      permissions: req.user.permissions,
+      playback_time_restricted: req.user.playback_time_restricted || false,
+      playback_start_date: req.user.playback_start_date || null,
+      playback_end_date: req.user.playback_end_date || null,
+      playback_start_hour: req.user.playback_start_hour || null,
+      playback_end_hour: req.user.playback_end_hour || null
     }
   });
 });
@@ -218,6 +265,11 @@ app.get('/api/users', authMiddleware, requireAdmin, (req, res) => {
     name: u.name,
     role: u.role,
     permissions: u.permissions,
+    playback_time_restricted: u.playback_time_restricted || false,
+    playback_start_date: u.playback_start_date || null,
+    playback_end_date: u.playback_end_date || null,
+    playback_start_hour: u.playback_start_hour || null,
+    playback_end_hour: u.playback_end_hour || null,
     createdAt: u.createdAt,
     expiresAt: u.expiresAt
   }));
@@ -226,7 +278,11 @@ app.get('/api/users', authMiddleware, requireAdmin, (req, res) => {
 
 // POST /api/users
 app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
-  const { username, name, password, role, permissions, expiresAt } = req.body;
+  const { 
+    username, name, password, role, permissions, expiresAt,
+    playback_time_restricted, playback_start_date, playback_end_date, playback_start_hour, playback_end_hour 
+  } = req.body;
+
   if (!username || !password) {
     return res.status(400).json({ error: 'Username dan password wajib diisi.' });
   }
@@ -250,6 +306,11 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
       can_hear_audio: permissions?.can_hear_audio === true,
       can_manage_users: role === 'admin'
     },
+    playback_time_restricted: playback_time_restricted === true,
+    playback_start_date: playback_start_date || null,
+    playback_end_date: playback_end_date || null,
+    playback_start_hour: playback_start_hour || null,
+    playback_end_hour: playback_end_hour || null,
     createdAt: new Date().toISOString(),
     expiresAt: expiresAt || null
   };
@@ -263,7 +324,10 @@ app.post('/api/users', authMiddleware, requireAdmin, (req, res) => {
 // PUT /api/users/:id
 app.put('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { name, password, permissions, expiresAt } = req.body;
+  const { 
+    name, password, permissions, expiresAt,
+    playback_time_restricted, playback_start_date, playback_end_date, playback_start_hour, playback_end_hour 
+  } = req.body;
 
   const users = loadUsers();
   const index = users.findIndex(u => u.id === id);
@@ -279,6 +343,13 @@ app.put('/api/users/:id', authMiddleware, requireAdmin, (req, res) => {
   if (expiresAt !== undefined) {
     users[index].expiresAt = expiresAt || null;
   }
+  if (playback_time_restricted !== undefined) {
+    users[index].playback_time_restricted = playback_time_restricted === true;
+  }
+  if (playback_start_date !== undefined) users[index].playback_start_date = playback_start_date || null;
+  if (playback_end_date !== undefined) users[index].playback_end_date = playback_end_date || null;
+  if (playback_start_hour !== undefined) users[index].playback_start_hour = playback_start_hour || null;
+  if (playback_end_hour !== undefined) users[index].playback_end_hour = playback_end_hour || null;
 
   saveUsers(users);
   res.json({ success: true, message: 'Izin akses user berhasil diperbarui.' });

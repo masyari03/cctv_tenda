@@ -295,71 +295,135 @@ class TendaPTZController {
   }
 
   /**
-   * Night Mode & AI Light Recognition Controller per Lens
+   * Night Mode & AI Light Recognition Controller per Lens via Native Camera RPC2
    * @param {string} lens 'cam1' | 'cam2'
    * @param {string} mode 'smart_ai' | 'full_color' | 'ir_classic' | 'day'
    */
   async setNightMode(lens = 'cam1', mode = 'smart_ai') {
-    const validModes = ['smart_ai', 'full_color', 'ir_classic', 'day'];
-    if (!validModes.includes(mode)) {
-      return { success: false, error: `Mode '${mode}' tidak valid. Pilihan: ${validModes.join(', ')}` };
-    }
-
-    const token = lens === 'cam2' ? 'VideoSource_2' : 'VideoSource_1';
-    let irCutFilter = 'AUTO';
-    let wdrMode = 'OFF';
-
-    switch (mode) {
-      case 'smart_ai':
-        irCutFilter = 'AUTO';
-        wdrMode = 'ON';
-        break;
-      case 'full_color':
-        irCutFilter = 'ON'; // Keep IR filter on so spotlight provides full color
-        wdrMode = 'ON';
-        break;
-      case 'ir_classic':
-        irCutFilter = 'OFF'; // IR cut filter off forces B&W infrared night vision
-        wdrMode = 'OFF';
-        break;
-      case 'day':
-        irCutFilter = 'ON';
-        wdrMode = 'OFF';
-        break;
-    }
-
-    const xml = `
-      <timg:SetImagingSettings xmlns:timg="http://www.onvif.org/ver20/imaging/wsdl">
-        <timg:VideoSourceToken>${token}</timg:VideoSourceToken>
-        <timg:ImagingSettings>
-          <tt:IrCutFilter>${irCutFilter}</tt:IrCutFilter>
-          <tt:WideDynamicRange>
-            <tt:Mode>${wdrMode}</tt:Mode>
-          </tt:WideDynamicRange>
-        </timg:ImagingSettings>
-      </timg:SetImagingSettings>
-    `;
-
-    const result = await this.sendSoapRequest('http://www.onvif.org/ver20/imaging/wsdl/SetImagingSettings', xml, '/onvif/imaging_service');
-
-    // Save state locally
-    try {
-      const modeFile = path.join(__dirname, 'data', 'night_mode.json');
-      let current = { cam1: 'smart_ai', cam2: 'smart_ai' };
-      if (fs.existsSync(modeFile)) {
-        current = JSON.parse(fs.readFileSync(modeFile, 'utf8'));
-      }
-      current[lens] = mode;
-      fs.writeFileSync(modeFile, JSON.stringify(current, null, 2), 'utf8');
-    } catch (e) {}
-
-    return {
-      success: true,
-      lens,
-      mode,
-      onvifStatus: result.success ? 'applied' : 'soft_applied',
-      message: `Mode malam ${lens === 'cam1' ? 'Lensa 1 (PTZ 360)' : 'Lensa 2 (Sudut Lebar)'} berhasil diatur ke [${mode}]`
+    const modeMapping = {
+      smart_ai: 'Smart',      // AI Smart: IR B&W in dark, white spotlight auto-turns on when human/vehicle detected
+      full_color: 'FullColor', // White spotlight LED always on (full color night vision)
+      ir_classic: 'Infrared',  // Classic B&W infrared LED
+      day: 'Off'               // Day mode: lights off
     };
+
+    const targetMode = modeMapping[mode];
+    if (!targetMode) {
+      return { success: false, error: `Mode '${mode}' tidak valid. Pilihan: smart_ai, full_color, ir_classic, day` };
+    }
+
+    const channel = lens === 'cam2' ? 1 : 0;
+
+    return new Promise((resolve) => {
+      try {
+        const postLogin = JSON.stringify({
+          method: 'global.login',
+          params: {
+            username: this.username,
+            password: Buffer.from(this.password).toString('base64'),
+            clientType: 'Web3.0'
+          },
+          id: 1
+        });
+
+        const req = https.request({
+          hostname: this.ip,
+          port: 443,
+          path: '/RPC2',
+          method: 'POST',
+          rejectUnauthorized: false,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postLogin)
+          },
+          timeout: 4000
+        }, (res) => {
+          let data = '';
+          res.on('data', d => data += d);
+          res.on('end', () => {
+            const rawCookie = res.headers['set-cookie'];
+            const cookie = rawCookie && rawCookie[0] ? rawCookie[0].split(';')[0] : '';
+            if (!cookie) {
+              return resolve({ success: false, error: 'Login RPC2 kamera gagal.' });
+            }
+
+            const setConfigData = JSON.stringify({
+              method: 'configManager.setConfig',
+              params: {
+                name: 'NightVision',
+                channel: channel,
+                table: {
+                  AlertType: ["VideoMotion", "VideoHuman", "VideoVehicle", "VideoBike"],
+                  InfraredBrightness: 100,
+                  Mode: targetMode,
+                  WhiteBrightness: 100
+                }
+              },
+              id: 2
+            });
+
+            const req2 = https.request({
+              hostname: this.ip,
+              port: 443,
+              path: '/RPC2',
+              method: 'POST',
+              rejectUnauthorized: false,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cookie': cookie,
+                'Content-Length': Buffer.byteLength(setConfigData)
+              },
+              timeout: 4000
+            }, (res2) => {
+              let data2 = '';
+              res2.on('data', d => data2 += d);
+              res2.on('end', () => {
+                try {
+                  const json = JSON.parse(data2);
+                  const isOk = json.result === true;
+
+                  // Save state locally
+                  try {
+                    const modeFile = path.join(__dirname, 'data', 'night_mode.json');
+                    let current = { cam1: 'smart_ai', cam2: 'smart_ai' };
+                    if (fs.existsSync(modeFile)) {
+                      current = JSON.parse(fs.readFileSync(modeFile, 'utf8'));
+                    }
+                    current[lens] = mode;
+                    fs.writeFileSync(modeFile, JSON.stringify(current, null, 2), 'utf8');
+                  } catch (e) {}
+
+                  resolve({
+                    success: isOk,
+                    lens,
+                    mode,
+                    cameraMode: targetMode,
+                    channel,
+                    message: isOk
+                      ? `Lampu & Mode malam ${lens === 'cam1' ? 'Lensa 1 (PTZ 360)' : 'Lensa 2 (Sudut Lebar)'} berhasil diubah ke [${targetMode}]`
+                      : 'Kamera menolak perintah mode malam RPC2.'
+                  });
+                } catch (e) {
+                  resolve({ success: false, error: e.message });
+                }
+              });
+            });
+
+            req2.on('error', (err) => resolve({ success: false, error: err.message }));
+            req2.write(setConfigData);
+            req2.end();
+          });
+        });
+
+        req.on('error', (err) => resolve({ success: false, error: err.message }));
+        req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Timeout koneksi kamera RPC2' }); });
+        req.write(postLogin);
+        req.end();
+
+      } catch (err) {
+        resolve({ success: false, error: err.message });
+      }
+    });
   }
 
   getNightModes() {

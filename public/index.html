@@ -323,6 +323,7 @@
                   <th>Nama</th>
                   <th>Peran</th>
                   <th>Hak Akses Khusus</th>
+                  <th>Jadwal Akses Reka Ulang</th>
                   <th>Masa Berlaku</th>
                   <th>Aksi</th>
                 </tr>
@@ -481,6 +482,39 @@
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" id="permPlayback"> Buka Akses Reka Ulang (Riwayat Rekaman)
             </label>
+
+            <!-- PLAYBACK TIME RESTRICTION SETTINGS -->
+            <div id="playbackTimeRestrictionBox" style="margin-left: 24px; padding: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); border-radius: var(--radius-sm); margin-top: 4px; display: flex; flex-direction: column; gap: 8px;">
+              <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--accent-cyan); font-size: 0.82rem; cursor: pointer;">
+                <input type="checkbox" id="checkPlaybackTimeRestricted"> Batasi Tanggal & Jam Buka Reka Ulang
+              </label>
+
+              <div id="playbackTimeInputs" style="display: none; flex-direction: column; gap: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Tanggal Mulai Izin</label>
+                    <input type="date" id="inputPlaybackStartDate" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                  </div>
+                  <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Tanggal Berakhir Izin</label>
+                    <input type="date" id="inputPlaybackEndDate" class="form-control" style="font-size: 0.8rem; padding: 6px;">
+                  </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Jam Mulai (WIB)</label>
+                    <input type="time" id="inputPlaybackStartHour" class="form-control" value="08:00" style="font-size: 0.8rem; padding: 6px;">
+                  </div>
+                  <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 2px;">Jam Selesai (WIB)</label>
+                    <input type="time" id="inputPlaybackEndHour" class="form-control" value="17:00" style="font-size: 0.8rem; padding: 6px;">
+                  </div>
+                </div>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Di luar rentang tanggal atau jam di atas, akses reka ulang otomatis terkunci bagi pengguna ini.</span>
+              </div>
+            </div>
+
             <label style="display: flex; align-items: center; gap: 8px;">
               <input type="checkbox" id="permDownload"> Izin Download File Video
             </label>
