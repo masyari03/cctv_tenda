@@ -41,6 +41,30 @@ const currentPlayingSub = document.getElementById('currentPlayingSub');
 const downloadContainer = document.getElementById('downloadContainer');
 const btnDownloadClip = document.getElementById('btnDownloadClip');
 
+// Dual Player & Fast Nav Controls
+const singlePlayerBox = document.getElementById('singlePlayerBox');
+const dualPlayerBox = document.getElementById('dualPlayerBox');
+const dualVideoCam1 = document.getElementById('dualVideoCam1');
+const dualVideoCam2 = document.getElementById('dualVideoCam2');
+const dualOverlayCam1 = document.getElementById('dualOverlayCam1');
+const dualOverlayCam2 = document.getElementById('dualOverlayCam2');
+
+const syncTimeline = document.getElementById('syncTimeline');
+const timeCurrent = document.getElementById('timeCurrent');
+const timeDuration = document.getElementById('timeDuration');
+
+const btnPrevClip = document.getElementById('btnPrevClip');
+const btnNextClip = document.getElementById('btnNextClip');
+const btnRewind10 = document.getElementById('btnRewind10');
+const btnRewind5 = document.getElementById('btnRewind5');
+const btnPlayPause = document.getElementById('btnPlayPause');
+const btnForward5 = document.getElementById('btnForward5');
+const btnForward10 = document.getElementById('btnForward10');
+
+let currentClips = [];
+let currentClipIndex = -1;
+let currentPlaybackMode = 'both';
+
 // Settings & Storage Elements
 const storageText = document.getElementById('storageText');
 const storageFill = document.getElementById('storageFill');
@@ -405,12 +429,92 @@ if (playbackHourSelect) {
 
 btnFetchRecordings.addEventListener('click', fetchRecordings);
 
+function getActiveVideos() {
+  if (currentPlaybackMode === 'both') {
+    const list = [];
+    if (dualVideoCam1 && dualVideoCam1.src && dualVideoCam1.style.display !== 'none') list.push(dualVideoCam1);
+    if (dualVideoCam2 && dualVideoCam2.src && dualVideoCam2.style.display !== 'none') list.push(dualVideoCam2);
+    return list;
+  }
+  return playbackVideo && playbackVideo.src ? [playbackVideo] : [];
+}
+
+function updatePlayPauseBtnUI(playing) {
+  if (!btnPlayPause) return;
+  btnPlayPause.textContent = playing ? '⏸️ Pause' : '▶️ Play';
+  btnPlayPause.classList.toggle('playing', playing);
+}
+
+function formatPlayTime(sec) {
+  if (isNaN(sec) || sec < 0) return '00:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function seekRelative(seconds) {
+  const vids = getActiveVideos();
+  if (vids.length === 0) return;
+
+  vids.forEach(v => {
+    try {
+      const dur = v.duration || 60;
+      v.currentTime = Math.max(0, Math.min(dur, v.currentTime + seconds));
+    } catch (e) {}
+  });
+
+  const master = vids[0];
+  if (master && syncTimeline) {
+    syncTimeline.value = master.currentTime;
+    timeCurrent.textContent = formatPlayTime(master.currentTime);
+  }
+}
+
+function togglePlayPause() {
+  const vids = getActiveVideos();
+  if (vids.length === 0) return;
+  const isPaused = vids[0].paused;
+
+  vids.forEach(v => {
+    if (isPaused) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  });
+  updatePlayPauseBtnUI(isPaused);
+}
+
+function selectClipByIndex(idx) {
+  if (idx < 0 || idx >= currentClips.length) return;
+  currentClipIndex = idx;
+
+  document.querySelectorAll('.clip-item').forEach((item, i) => {
+    item.classList.toggle('active', i === idx);
+  });
+
+  const clip = currentClips[idx];
+  playClip(currentPlaybackMode, clip);
+}
+
+function playPrevClip() {
+  if (currentClipIndex > 0) {
+    selectClipByIndex(currentClipIndex - 1);
+  }
+}
+
+function playNextClip() {
+  if (currentClipIndex < currentClips.length - 1) {
+    selectClipByIndex(currentClipIndex + 1);
+  }
+}
+
 async function fetchRecordings() {
   const camera = playbackCameraSelect.value;
-  const date = playbackDateInput.value;
+  const date = playbackDateInput.value || getLocalDateString();
   const hourParam = activeHourFilter ? `&hour=${encodeURIComponent(activeHourFilter)}` : '';
 
-  clipsList.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Memuat arsip...</div>`;
+  clipsList.innerHTML = `<div style="text-align: center; padding: 2rem; color: var(--text-muted);">Memuat arsip rekaman...</div>`;
 
   try {
     const res = await fetch(`/api/recordings?camera=${camera}&date=${date}${hourParam}`);
@@ -422,37 +526,55 @@ async function fetchRecordings() {
       return;
     }
 
+    currentPlaybackMode = data.mode || (camera === 'both' ? 'both' : 'single');
+    currentClips = data.files || [];
+    currentClipIndex = -1;
+
     if (clipsCountBadge) {
-      clipsCountBadge.textContent = `${data.files.length} Klip`;
+      clipsCountBadge.textContent = `${currentClips.length} Klip`;
     }
 
-    if (data.files.length === 0) {
+    if (currentClips.length === 0) {
       clipsList.innerHTML = `<div style="color: var(--text-muted); font-size: 0.85rem; padding: 2rem; text-align: center;">Tidak ada rekaman untuk tanggal ${date} ${activeHourFilter ? '(filter jam aktif)' : ''}.</div>`;
       return;
     }
 
     clipsList.innerHTML = '';
-    data.files.forEach((clip, idx) => {
+    currentClips.forEach((clip, idx) => {
       const item = document.createElement('div');
       item.className = 'clip-item' + (idx === 0 ? ' active' : '');
-      item.innerHTML = `
-        <div>
-          <div class="clip-time">🕒 ${clip.time}</div>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">${clip.filename}</div>
-        </div>
-        <div class="clip-size">${clip.sizeFormatted}</div>
-      `;
+
+      if (currentPlaybackMode === 'both') {
+        const hasCam1 = !!clip.cam1;
+        const hasCam2 = !!clip.cam2;
+        item.innerHTML = `
+          <div>
+            <div class="clip-time">🕒 ${clip.minute || clip.time} (Dual Lensa)</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+              ${hasCam1 ? '🎥 Lensa 1' : '❌ Lensa 1'} • ${hasCam2 ? '📹 Lensa 2' : '❌ Lensa 2'}
+            </div>
+          </div>
+          <div class="clip-size" style="font-size: 0.72rem; color: var(--accent-cyan);">Dual Sync</div>
+        `;
+      } else {
+        item.innerHTML = `
+          <div>
+            <div class="clip-time">🕒 ${clip.time}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">${clip.filename}</div>
+          </div>
+          <div class="clip-size">${clip.sizeFormatted}</div>
+        `;
+      }
+
       item.addEventListener('click', () => {
-        document.querySelectorAll('.clip-item').forEach(c => c.classList.remove('active'));
-        item.classList.add('active');
-        playClip(camera, clip);
+        selectClipByIndex(idx);
       });
       clipsList.appendChild(item);
     });
 
     // Auto-play first clip
-    if (data.files.length > 0) {
-      playClip(camera, data.files[0]);
+    if (currentClips.length > 0) {
+      selectClipByIndex(0);
     }
 
   } catch (err) {
@@ -461,27 +583,128 @@ async function fetchRecordings() {
   }
 }
 
-function playClip(camera, clip) {
-  currentPlayingClip = { camera, ...clip };
-  const streamUrl = `/api/recordings/stream/${camera}/${clip.filename}`;
-  playbackVideo.src = streamUrl;
-  playbackVideo.load();
-  playbackVideo.play().catch(() => {});
+function playClip(mode, clip) {
+  currentPlayingClip = { mode, ...clip };
 
-  currentPlayingTitle.textContent = `▶️ ${camera === 'cam1' ? 'Lensa 1 (PTZ)' : 'Lensa 2 (Fixed)'} - ${clip.time}`;
-  currentPlayingSub.textContent = `File: ${clip.filename} (${clip.sizeFormatted})`;
+  // Update Download Button
+  const canDownload = currentUser && (currentUser.role === 'admin' || currentUser.permissions?.can_download_clips);
 
-  // Download Button Handling
-  const canDownload = currentUser.role === 'admin' || currentUser.permissions?.can_download_clips;
-  if (canDownload) {
-    downloadContainer.style.display = 'block';
-    btnDownloadClip.onclick = () => {
-      window.location.href = `/api/recordings/download/${camera}/${clip.filename}`;
-    };
+  if (mode === 'both') {
+    // Show Dual Player Box, Hide Single
+    if (singlePlayerBox) singlePlayerBox.style.display = 'none';
+    if (dualPlayerBox) dualPlayerBox.style.display = 'grid';
+
+    // Lensa 1 (PTZ)
+    if (clip.cam1 && clip.cam1.filename) {
+      dualVideoCam1.src = `/api/recordings/stream/cam1/${clip.cam1.filename}`;
+      dualVideoCam1.style.display = 'block';
+      dualOverlayCam1.style.display = 'none';
+      dualVideoCam1.load();
+      dualVideoCam1.play().catch(() => {});
+    } else {
+      dualVideoCam1.removeAttribute('src');
+      dualVideoCam1.style.display = 'none';
+      dualOverlayCam1.style.display = 'flex';
+    }
+
+    // Lensa 2 (Fixed)
+    if (clip.cam2 && clip.cam2.filename) {
+      dualVideoCam2.src = `/api/recordings/stream/cam2/${clip.cam2.filename}`;
+      dualVideoCam2.style.display = 'block';
+      dualOverlayCam2.style.display = 'none';
+      dualVideoCam2.load();
+      dualVideoCam2.play().catch(() => {});
+    } else {
+      dualVideoCam2.removeAttribute('src');
+      dualVideoCam2.style.display = 'none';
+      dualOverlayCam2.style.display = 'flex';
+    }
+
+    currentPlayingTitle.textContent = `🎥 Dual Sync Playback - ${clip.minute || clip.time}`;
+    currentPlayingSub.textContent = `Lensa 1: ${clip.cam1 ? clip.cam1.filename : '(Tidak ada)'} | Lensa 2: ${clip.cam2 ? clip.cam2.filename : '(Tidak ada)'}`;
+
+    if (canDownload && clip.cam1) {
+      downloadContainer.style.display = 'flex';
+      downloadContainer.innerHTML = `
+        <button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;" onclick="window.location.href='/api/recordings/download/cam1/${clip.cam1.filename}'">⬇️ Unduh Lensa 1</button>
+        ${clip.cam2 ? `<button class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem; background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.4); color: #60a5fa;" onclick="window.location.href='/api/recordings/download/cam2/${clip.cam2.filename}'">⬇️ Unduh Lensa 2</button>` : ''}
+      `;
+    } else {
+      downloadContainer.style.display = 'none';
+    }
+
   } else {
-    downloadContainer.style.display = 'none';
+    // Single Camera Mode
+    if (dualPlayerBox) dualPlayerBox.style.display = 'none';
+    if (singlePlayerBox) singlePlayerBox.style.display = 'block';
+
+    const camKey = clip.camera || playbackCameraSelect.value || 'cam1';
+    playbackVideo.src = `/api/recordings/stream/${camKey}/${clip.filename}`;
+    playbackVideo.load();
+    playbackVideo.play().catch(() => {});
+
+    currentPlayingTitle.textContent = `▶️ ${camKey === 'cam1' ? 'Lensa 1 (PTZ)' : 'Lensa 2 (Sudut Lebar)'} - ${clip.time}`;
+    currentPlayingSub.textContent = `File: ${clip.filename} (${clip.sizeFormatted})`;
+
+    if (canDownload) {
+      downloadContainer.style.display = 'flex';
+      downloadContainer.innerHTML = `
+        <button class="btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="window.location.href='/api/recordings/download/${camKey}/${clip.filename}'">⬇️ Download Klip</button>
+      `;
+    } else {
+      downloadContainer.style.display = 'none';
+    }
   }
+
+  updatePlayPauseBtnUI(true);
 }
+
+// Bind Timeupdate on videos for synced timeline
+function bindVideoSync(videoElem) {
+  if (!videoElem) return;
+
+  videoElem.addEventListener('timeupdate', () => {
+    if (!syncTimeline || syncTimeline.matches(':active')) return;
+    const cur = videoElem.currentTime;
+    const dur = videoElem.duration || 60;
+    syncTimeline.value = cur;
+    if (dur && !isNaN(dur)) syncTimeline.max = dur;
+    timeCurrent.textContent = formatPlayTime(cur);
+    timeDuration.textContent = formatPlayTime(dur);
+  });
+
+  videoElem.addEventListener('play', () => updatePlayPauseBtnUI(true));
+  videoElem.addEventListener('pause', () => updatePlayPauseBtnUI(false));
+  videoElem.addEventListener('ended', () => {
+    // Auto advance to next clip when clip ends
+    playNextClip();
+  });
+}
+
+bindVideoSync(playbackVideo);
+bindVideoSync(dualVideoCam1);
+bindVideoSync(dualVideoCam2);
+
+// Timeline Scrubber Drag
+if (syncTimeline) {
+  syncTimeline.addEventListener('input', () => {
+    const val = parseFloat(syncTimeline.value);
+    timeCurrent.textContent = formatPlayTime(val);
+    const vids = getActiveVideos();
+    vids.forEach(v => {
+      try { v.currentTime = val; } catch (e) {}
+    });
+  });
+}
+
+// Navigation & Skip Buttons
+if (btnRewind10) btnRewind10.addEventListener('click', () => seekRelative(-10));
+if (btnRewind5) btnRewind5.addEventListener('click', () => seekRelative(-5));
+if (btnForward5) btnForward5.addEventListener('click', () => seekRelative(5));
+if (btnForward10) btnForward10.addEventListener('click', () => seekRelative(10));
+if (btnPrevClip) btnPrevClip.addEventListener('click', playPrevClip);
+if (btnNextClip) btnNextClip.addEventListener('click', playNextClip);
+if (btnPlayPause) btnPlayPause.addEventListener('click', togglePlayPause);
 
 // Playback Speed Controls
 document.querySelectorAll('.btn-speed').forEach(btn => {
@@ -489,8 +712,53 @@ document.querySelectorAll('.btn-speed').forEach(btn => {
     document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     const speed = parseFloat(btn.getAttribute('data-speed'));
-    playbackVideo.playbackRate = speed;
+    const vids = [playbackVideo, dualVideoCam1, dualVideoCam2];
+    vids.forEach(v => {
+      if (v) v.playbackRate = speed;
+    });
   });
+});
+
+// Keyboard Shortcuts for Playback Navigation
+window.addEventListener('keydown', (e) => {
+  if (activeTab !== 'tabPlayback') return;
+  // Ignore if user is currently typing in an input
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+  switch (e.key) {
+    case ' ':
+    case 'k':
+    case 'K':
+      e.preventDefault();
+      togglePlayPause();
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      seekRelative(-5);
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      seekRelative(5);
+      break;
+    case 'j':
+    case 'J':
+      e.preventDefault();
+      seekRelative(-10);
+      break;
+    case 'l':
+    case 'L':
+      e.preventDefault();
+      seekRelative(10);
+      break;
+    case '[':
+      e.preventDefault();
+      playPrevClip();
+      break;
+    case ']':
+      e.preventDefault();
+      playNextClip();
+      break;
+  }
 });
 
 // ==========================================

@@ -172,6 +172,7 @@
             <div class="form-group">
               <label>Pilih Lensa Kamera</label>
               <select id="playbackCameraSelect" class="form-control">
+                <option value="both" selected>🎥 Kedua Lensa Sekaligus (Dual Sync 360° + Lebar)</option>
                 <option value="cam1">Lensa 1: Pan / Tilt 360°</option>
                 <option value="cam2">Lensa 2: Fixed Wide-Angle</option>
               </select>
@@ -218,24 +219,67 @@
 
           <!-- VIDEO PLAYER -->
           <div class="glass-panel player-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
               <div>
                 <h3 id="currentPlayingTitle" style="font-size: 1.1rem;">Pemutar Reka Ulang</h3>
                 <span id="currentPlayingSub" style="font-size: 0.8rem; color: var(--text-muted);">Pilih salah satu klip dari daftar di samping untuk memutar.</span>
               </div>
-              <div id="downloadContainer" style="display: none;">
-                <button id="btnDownloadClip" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.85rem;">
+              <div id="downloadContainer" style="display: none; gap: 6px;">
+                <button id="btnDownloadClip" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.8rem; padding: 6px 12px;">
                   ⬇️ Download Klip
                 </button>
               </div>
             </div>
 
-            <div class="video-container">
-              <video id="playbackVideo" controls autoplay playsinline></video>
+            <!-- SINGLE PLAYER BOX (Mode 1 Lensa) -->
+            <div id="singlePlayerBox" class="video-container" style="display: none;">
+              <video id="playbackVideo" controls playsinline></video>
+            </div>
+
+            <!-- DUAL PLAYER BOX (Mode 2 Lensa Sekaligus) -->
+            <div id="dualPlayerBox" class="dual-player-grid">
+              <div class="dual-video-wrapper">
+                <div class="dual-video-header">
+                  <span class="live-indicator" style="background: var(--accent-cyan); box-shadow: 0 0 6px var(--accent-cyan);"></span>
+                  <span>Lensa 1: Pan / Tilt 360°</span>
+                </div>
+                <video id="dualVideoCam1" playsinline></video>
+                <div id="dualOverlayCam1" class="dual-overlay" style="display: none;">Klip Lensa 1 tidak tersedia</div>
+              </div>
+
+              <div class="dual-video-wrapper">
+                <div class="dual-video-header">
+                  <span class="live-indicator" style="background: var(--accent-blue); box-shadow: 0 0 6px var(--accent-blue);"></span>
+                  <span>Lensa 2: Fixed Wide-Angle</span>
+                </div>
+                <video id="dualVideoCam2" playsinline></video>
+                <div id="dualOverlayCam2" class="dual-overlay" style="display: none;">Klip Lensa 2 tidak tersedia</div>
+              </div>
+            </div>
+
+            <!-- TIMELINE & JUMP / SEEK CONTROLS BAR -->
+            <div class="playback-controls-bar">
+              <!-- Sync Timeline Slider -->
+              <div class="timeline-scrubber-row">
+                <span id="timeCurrent" class="time-display">00:00</span>
+                <input type="range" id="syncTimeline" class="timeline-slider" min="0" max="60" value="0" step="0.2">
+                <span id="timeDuration" class="time-display">01:00</span>
+              </div>
+
+              <!-- Fast Nav & Jump Buttons -->
+              <div class="nav-buttons-row">
+                <button type="button" id="btnPrevClip" class="btn-ctrl" title="Klip Sebelumnya (Shortcut: [ )">⏮️ Klip Sebelumnya</button>
+                <button type="button" id="btnRewind10" class="btn-ctrl" title="Mundur 10 Detik (Shortcut: J)">⏪ -10s</button>
+                <button type="button" id="btnRewind5" class="btn-ctrl" title="Mundur 5 Detik (Shortcut: ◀ )">⏪ -5s</button>
+                <button type="button" id="btnPlayPause" class="btn-ctrl btn-play-main" title="Play / Pause (Shortcut: Spasi)">⏯️ Play</button>
+                <button type="button" id="btnForward5" class="btn-ctrl" title="Maju 5 Detik (Shortcut: ▶ )">⏩ +5s</button>
+                <button type="button" id="btnForward10" class="btn-ctrl" title="Maju 10 Detik (Shortcut: L)">⏩ +10s</button>
+                <button type="button" id="btnNextClip" class="btn-ctrl" title="Klip Berikutnya (Shortcut: ] )">Klip Berikutnya ⏭️</button>
+              </div>
             </div>
 
             <!-- SPEED BAR -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px solid var(--border-color); flex-wrap: wrap; gap: 8px;">
               <div class="speed-controls">
                 <span style="font-size: 0.85rem; color: var(--text-secondary); margin-right: 4px;">Kecepatan Putar:</span>
                 <button class="btn-speed" data-speed="0.5">0.5x</button>
@@ -245,7 +289,7 @@
                 <button class="btn-speed" data-speed="8.0">8.0x</button>
               </div>
               <div style="font-size: 0.85rem; color: var(--accent-emerald);">
-                🎙️ Suara Mikrofon: Aktif
+                🎙️ Suara Mikrofon: AAC 16kHz
               </div>
             </div>
           </div>

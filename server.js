@@ -358,49 +358,107 @@ function getCameraFolders(cameraKey) {
 
 // GET /api/recordings
 app.get('/api/recordings', authMiddleware, checkPermission('can_view_playback'), async (req, res) => {
-  const cameraKey = req.query.camera === 'cam2' ? 'cam2' : 'cam1';
+  const reqCam = req.query.camera || 'both';
+  const isBoth = reqCam === 'both';
   const targetDate = req.query.date; // YYYY-MM-DD
   const targetHour = req.query.hour; // '00' to '23' or empty for all
-  const folders = getCameraFolders(cameraKey);
 
   try {
-    let files = [];
-    for (const folder of folders) {
-      if (!fs.existsSync(folder)) continue;
-      const entries = await fs.promises.readdir(folder);
+    const scanFolderClips = async (cameraKey) => {
+      const folders = getCameraFolders(cameraKey);
+      let list = [];
+      for (const folder of folders) {
+        if (!fs.existsSync(folder)) continue;
+        const entries = await fs.promises.readdir(folder);
+        for (const file of entries) {
+          if (!file.toLowerCase().endsWith('.mp4')) continue;
+          if (targetDate && !file.startsWith(targetDate)) continue;
 
-      for (const file of entries) {
-        if (!file.toLowerCase().endsWith('.mp4')) continue;
-        if (targetDate && !file.startsWith(targetDate)) continue;
-
-        // Filter by hour if specified (format: YYYY-MM-DD_HH-MM-SS.mp4)
-        const fileHour = file.length >= 13 ? file.slice(11, 13) : '';
-        if (targetHour !== undefined && targetHour !== '') {
-          const hourList = targetHour.split(',').map(h => h.trim());
-          if (hourList.length > 0 && !hourList.includes(fileHour)) {
-            continue;
+          // Filter by hour if specified (format: YYYY-MM-DD_HH-MM-SS.mp4)
+          const fileHour = file.length >= 13 ? file.slice(11, 13) : '';
+          if (targetHour !== undefined && targetHour !== '') {
+            const hourList = targetHour.split(',').map(h => h.trim());
+            if (hourList.length > 0 && !hourList.includes(fileHour)) {
+              continue;
+            }
           }
+
+          const fullPath = path.join(folder, file);
+          const stat = await fs.promises.stat(fullPath);
+
+          list.push({
+            camera: cameraKey,
+            filename: file,
+            folder: path.basename(folder),
+            sizeBytes: stat.size,
+            sizeFormatted: stat.size > 1024 * 1024 ? (stat.size / (1024 * 1024)).toFixed(1) + ' MB' : (stat.size / 1024).toFixed(0) + ' KB',
+            date: file.slice(0, 10),
+            time: file.slice(11, 19).replace(/-/g, ':'),
+            minuteKey: file.slice(0, 16), // YYYY-MM-DD_HH-MM
+            hour: fileHour,
+            timestamp: stat.mtimeMs
+          });
         }
-
-        const fullPath = path.join(folder, file);
-        const stat = await fs.promises.stat(fullPath);
-
-        files.push({
-          filename: file,
-          folder: path.basename(folder),
-          sizeBytes: stat.size,
-          sizeFormatted: stat.size > 1024 * 1024 ? (stat.size / (1024 * 1024)).toFixed(1) + ' MB' : (stat.size / 1024).toFixed(0) + ' KB',
-          date: file.slice(0, 10),
-          time: file.slice(11, 19).replace(/-/g, ':'),
-          hour: fileHour,
-          timestamp: stat.mtimeMs
-        });
       }
+      return list;
+    };
+
+    if (isBoth) {
+      const [cam1Files, cam2Files] = await Promise.all([
+        scanFolderClips('cam1'),
+        scanFolderClips('cam2')
+      ]);
+
+      const pairMap = new Map();
+
+      // Index cam1
+      for (const item of cam1Files) {
+        const key = item.minuteKey;
+        if (!pairMap.has(key)) {
+          pairMap.set(key, {
+            key,
+            date: item.date,
+            time: item.time,
+            minute: item.filename.slice(11, 16).replace(/-/g, ':'),
+            hour: item.hour,
+            timestamp: item.timestamp,
+            cam1: item,
+            cam2: null
+          });
+        } else {
+          pairMap.get(key).cam1 = item;
+        }
+      }
+
+      // Index cam2
+      for (const item of cam2Files) {
+        const key = item.minuteKey;
+        if (!pairMap.has(key)) {
+          pairMap.set(key, {
+            key,
+            date: item.date,
+            time: item.time,
+            minute: item.filename.slice(11, 16).replace(/-/g, ':'),
+            hour: item.hour,
+            timestamp: item.timestamp,
+            cam1: null,
+            cam2: item
+          });
+        } else {
+          pairMap.get(key).cam2 = item;
+        }
+      }
+
+      const files = Array.from(pairMap.values());
+      files.sort((a, b) => b.timestamp - a.timestamp);
+      return res.json({ mode: 'both', files, count: files.length, targetDate, targetHour: targetHour || 'all' });
     }
 
-    // Sort newest first
+    // Single camera mode
+    const cameraKey = reqCam === 'cam2' ? 'cam2' : 'cam1';
+    const files = await scanFolderClips(cameraKey);
     files.sort((a, b) => b.timestamp - a.timestamp);
-    res.json({ files, count: files.length, targetDate, targetHour: targetHour || 'all' });
+    res.json({ mode: 'single', camera: cameraKey, files, count: files.length, targetDate, targetHour: targetHour || 'all' });
   } catch (err) {
     console.error('[Recordings] Error listing files:', err.message);
     res.status(500).json({ error: 'Gagal membaca riwayat rekaman' });
