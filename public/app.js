@@ -583,11 +583,78 @@ async function fetchRecordings() {
   }
 }
 
+let isCompatMode = false;
+const btnToggleCompat = document.getElementById('btnToggleCompat');
+const playbackErrorNotice = document.getElementById('playbackErrorNotice');
+const btnAudioCam1 = document.getElementById('btnAudioCam1');
+const btnAudioCam2 = document.getElementById('btnAudioCam2');
+
+function setCompatMode(enabled) {
+  isCompatMode = enabled;
+  if (btnToggleCompat) {
+    btnToggleCompat.textContent = isCompatMode ? '⚡ Mode Kompatibel (H.264): ON' : '⚡ Mode Kompatibel (H.264): OFF';
+    btnToggleCompat.classList.toggle('active', isCompatMode);
+  }
+  if (playbackErrorNotice) {
+    playbackErrorNotice.style.display = 'none';
+  }
+  if (currentPlayingClip && currentClipIndex >= 0 && currentClips[currentClipIndex]) {
+    playClip(currentPlaybackMode, currentClips[currentClipIndex]);
+  }
+}
+
+if (btnToggleCompat) {
+  btnToggleCompat.addEventListener('click', () => {
+    setCompatMode(!isCompatMode);
+  });
+}
+
+window.enableCompatMode = function() {
+  setCompatMode(true);
+};
+
+if (btnAudioCam1 && dualVideoCam1) {
+  btnAudioCam1.addEventListener('click', () => {
+    dualVideoCam1.muted = !dualVideoCam1.muted;
+    btnAudioCam1.textContent = dualVideoCam1.muted ? '🔇 Buka Suara' : '🔊 Suara Aktif';
+    btnAudioCam1.classList.toggle('unmuted', !dualVideoCam1.muted);
+  });
+}
+
+if (btnAudioCam2 && dualVideoCam2) {
+  btnAudioCam2.addEventListener('click', () => {
+    dualVideoCam2.muted = !dualVideoCam2.muted;
+    btnAudioCam2.textContent = dualVideoCam2.muted ? '🔇 Buka Suara' : '🔊 Suara Aktif';
+    btnAudioCam2.classList.toggle('unmuted', !dualVideoCam2.muted);
+  });
+}
+
+function attachVideoErrorHandler(videoElem, label) {
+  if (!videoElem) return;
+  videoElem.addEventListener('error', () => {
+    const err = videoElem.error;
+    console.warn(`[VideoError] ${label} error:`, err);
+    if (!isCompatMode && playbackErrorNotice) {
+      playbackErrorNotice.style.display = 'flex';
+      playbackErrorNotice.innerHTML = `
+        <div>⚠️ <strong>Browser belum mendukung H.265 bawaan (${label}).</strong> Klik tombol untuk memutar dengan konversi H.264 instan:</div>
+        <button type="button" class="btn-primary" style="margin-top:6px; font-size:0.75rem; padding:6px 12px;" onclick="enableCompatMode()">⚡ Aktifkan Mode Kompatibel (H.264)</button>
+      `;
+    }
+  });
+}
+
+attachVideoErrorHandler(playbackVideo, 'Lensa');
+attachVideoErrorHandler(dualVideoCam1, 'Lensa 1');
+attachVideoErrorHandler(dualVideoCam2, 'Lensa 2');
+
 function playClip(mode, clip) {
   currentPlayingClip = { mode, ...clip };
+  if (playbackErrorNotice) playbackErrorNotice.style.display = 'none';
 
   // Update Download Button
   const canDownload = currentUser && (currentUser.role === 'admin' || currentUser.permissions?.can_download_clips);
+  const compatParam = isCompatMode ? '?compat=1' : '';
 
   if (mode === 'both') {
     // Show Dual Player Box, Hide Single
@@ -596,9 +663,14 @@ function playClip(mode, clip) {
 
     // Lensa 1 (PTZ)
     if (clip.cam1 && clip.cam1.filename) {
-      dualVideoCam1.src = `/api/recordings/stream/cam1/${clip.cam1.filename}`;
+      dualVideoCam1.src = `/api/recordings/stream/cam1/${clip.cam1.filename}${compatParam}`;
       dualVideoCam1.style.display = 'block';
       dualOverlayCam1.style.display = 'none';
+      dualVideoCam1.muted = true;
+      if (btnAudioCam1) {
+        btnAudioCam1.textContent = '🔇 Buka Suara';
+        btnAudioCam1.classList.remove('unmuted');
+      }
       dualVideoCam1.load();
       dualVideoCam1.play().catch(() => {});
     } else {
@@ -609,9 +681,14 @@ function playClip(mode, clip) {
 
     // Lensa 2 (Fixed)
     if (clip.cam2 && clip.cam2.filename) {
-      dualVideoCam2.src = `/api/recordings/stream/cam2/${clip.cam2.filename}`;
+      dualVideoCam2.src = `/api/recordings/stream/cam2/${clip.cam2.filename}${compatParam}`;
       dualVideoCam2.style.display = 'block';
       dualOverlayCam2.style.display = 'none';
+      dualVideoCam2.muted = true;
+      if (btnAudioCam2) {
+        btnAudioCam2.textContent = '🔇 Buka Suara';
+        btnAudioCam2.classList.remove('unmuted');
+      }
       dualVideoCam2.load();
       dualVideoCam2.play().catch(() => {});
     } else {
@@ -639,7 +716,8 @@ function playClip(mode, clip) {
     if (singlePlayerBox) singlePlayerBox.style.display = 'block';
 
     const camKey = clip.camera || playbackCameraSelect.value || 'cam1';
-    playbackVideo.src = `/api/recordings/stream/${camKey}/${clip.filename}`;
+    playbackVideo.src = `/api/recordings/stream/${camKey}/${clip.filename}${compatParam}`;
+    playbackVideo.muted = true;
     playbackVideo.load();
     playbackVideo.play().catch(() => {});
 

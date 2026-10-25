@@ -466,7 +466,7 @@ app.get('/api/recordings', authMiddleware, checkPermission('can_view_playback'),
 });
 
 // GET /api/recordings/stream/:camera/:filename
-// HTTP 206 Partial Content video range stream
+// HTTP 206 Partial Content video range stream OR on-demand H.264 compatibility mode
 app.get('/api/recordings/stream/:camera/:filename', authMiddleware, checkPermission('can_view_playback'), (req, res) => {
   const cameraKey = req.params.camera === 'cam2' ? 'cam2' : 'cam1';
   const safeFilename = path.basename(req.params.filename);
@@ -483,6 +483,41 @@ app.get('/api/recordings/stream/:camera/:filename', authMiddleware, checkPermiss
 
   if (!filePath || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File video rekaman tidak ditemukan' });
+  }
+
+  // H.264 Compatibility Mode (for browsers or devices without native HEVC hardware support)
+  if (req.query.compat === '1') {
+    res.writeHead(200, {
+      'Content-Type': 'video/mp4',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff'
+    });
+
+    const { spawn } = require('child_process');
+    const ffmpegProc = spawn(recorder.ffmpegBinary, [
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-i', filePath,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-tune', 'zerolatency',
+      '-crf', '26',
+      '-c:a', 'copy',
+      '-movflags', '+frag_keyframe+empty_moov+default_base_moof',
+      '-f', 'mp4',
+      'pipe:1'
+    ], { windowsHide: true });
+
+    ffmpegProc.stdout.pipe(res);
+
+    req.on('close', () => {
+      try { ffmpegProc.kill('SIGINT'); } catch (e) {}
+    });
+
+    ffmpegProc.on('error', (err) => {
+      console.error('[StreamCompat] FFmpeg spawn error:', err.message);
+    });
+    return;
   }
 
   const stat = fs.statSync(filePath);

@@ -835,27 +835,59 @@ video#playbackVideo {
 @media (max-width: 768px) {
   header {
     height: auto;
-    padding: 0.75rem 1rem;
+    padding: 8px 12px;
     flex-wrap: wrap;
-    gap: 0.6rem;
+    gap: 6px;
+    background: rgba(11, 15, 25, 0.95);
+    border-bottom: 1px solid var(--border-color);
   }
 
   .brand {
+    gap: 8px;
     flex: 1;
   }
 
   .brand h1 {
-    font-size: 1.05rem;
+    font-size: 0.95rem;
+    letter-spacing: -0.3px;
   }
 
   .brand-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    border-radius: 6px;
+  }
+
+  /* Sembunyikan subjudul di HP agar header atas ramping & tidak berlebih */
+  .brand span {
+    display: none;
   }
 
   .user-menu {
+    gap: 8px;
     flex-shrink: 0;
+  }
+
+  /* Di HP hanya tampilkan avatar lingkaran & tombol logout, sembunyikan teks nama/role */
+  .user-badge {
+    gap: 6px;
+  }
+
+  .user-badge > div:last-child {
+    display: none;
+  }
+
+  .user-badge .avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
+  }
+
+  .btn-logout {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 6px;
   }
 
   nav.nav-tabs {
@@ -864,8 +896,9 @@ video#playbackVideo {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 4px 0 2px;
-    gap: 6px;
+    padding: 2px 0 0;
+    gap: 4px;
+    display: flex;
   }
 
   nav.nav-tabs::-webkit-scrollbar {
@@ -875,14 +908,19 @@ video#playbackVideo {
   .nav-btn {
     white-space: nowrap;
     flex-shrink: 0;
-    padding: 7px 12px;
-    font-size: 0.8rem;
-    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.04);
+    gap: 4px;
   }
 
   .nav-btn.active {
     background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(59, 130, 246, 0.25));
+  }
+
+  main {
+    padding: 8px 10px;
   }
 
   .cam-header {
@@ -965,6 +1003,20 @@ video#playbackVideo {
     padding: 1.25rem;
     margin: 10px;
   }
+
+  .nav-buttons-row {
+    gap: 4px;
+  }
+
+  .btn-ctrl {
+    padding: 5px 8px;
+    font-size: 0.72rem;
+  }
+
+  .btn-play-main {
+    padding: 5px 12px;
+    font-size: 0.75rem;
+  }
 }
 
 /* =========================================================
@@ -986,6 +1038,7 @@ video#playbackVideo {
   .dual-player-grid {
     grid-template-columns: 1fr;
     gap: 8px;
+    padding: 4px;
   }
 }
 
@@ -1024,6 +1077,38 @@ video#playbackVideo {
   gap: 6px;
   z-index: 10;
   pointer-events: none;
+}
+
+.btn-audio-overlay {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 10;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-audio-overlay:hover {
+  background: rgba(6, 182, 212, 0.3);
+  border-color: var(--accent-cyan);
+  color: #fff;
+}
+
+.btn-audio-overlay.unmuted {
+  background: rgba(16, 185, 129, 0.4);
+  border-color: var(--accent-emerald);
+  color: #a7f3d0;
 }
 
 .dual-overlay {
@@ -1129,6 +1214,46 @@ video#playbackVideo {
 .btn-play-main.playing {
   background: linear-gradient(135deg, rgba(244, 63, 94, 0.3), rgba(245, 158, 11, 0.3));
   border-color: var(--accent-rose);
+}
+
+.btn-compat {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-compat:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+}
+
+.btn-compat.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(245, 158, 11, 0.2));
+  border-color: #f59e0b;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.playback-alert {
+  background: rgba(244, 63, 94, 0.15);
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  color: #fda4af;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 

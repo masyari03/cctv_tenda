@@ -224,16 +224,22 @@
                 <h3 id="currentPlayingTitle" style="font-size: 1.1rem;">Pemutar Reka Ulang</h3>
                 <span id="currentPlayingSub" style="font-size: 0.8rem; color: var(--text-muted);">Pilih salah satu klip dari daftar di samping untuk memutar.</span>
               </div>
-              <div id="downloadContainer" style="display: none; gap: 6px;">
-                <button id="btnDownloadClip" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.8rem; padding: 6px 12px;">
-                  ⬇️ Download Klip
-                </button>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                <button type="button" id="btnToggleCompat" class="btn-compat" title="Klik jika video tidak bisa berputar di browser atau HP Anda">⚡ Mode Kompatibel (H.264): OFF</button>
+                <div id="downloadContainer" style="display: none; gap: 6px;">
+                  <button id="btnDownloadClip" class="btn-primary" style="background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; font-size: 0.8rem; padding: 6px 12px;">
+                    ⬇️ Download Klip
+                  </button>
+                </div>
               </div>
             </div>
 
+            <!-- PLAYBACK ERROR NOTICE BANNER -->
+            <div id="playbackErrorNotice" class="playback-alert" style="display: none;"></div>
+
             <!-- SINGLE PLAYER BOX (Mode 1 Lensa) -->
             <div id="singlePlayerBox" class="video-container" style="display: none;">
-              <video id="playbackVideo" controls playsinline></video>
+              <video id="playbackVideo" controls playsinline muted></video>
             </div>
 
             <!-- DUAL PLAYER BOX (Mode 2 Lensa Sekaligus) -->
@@ -243,7 +249,8 @@
                   <span class="live-indicator" style="background: var(--accent-cyan); box-shadow: 0 0 6px var(--accent-cyan);"></span>
                   <span>Lensa 1: Pan / Tilt 360°</span>
                 </div>
-                <video id="dualVideoCam1" playsinline></video>
+                <video id="dualVideoCam1" controls playsinline muted></video>
+                <button type="button" class="btn-audio-overlay" id="btnAudioCam1" title="Nyalakan/Matikan Suara Lensa 1">🔇 Buka Suara</button>
                 <div id="dualOverlayCam1" class="dual-overlay" style="display: none;">Klip Lensa 1 tidak tersedia</div>
               </div>
 
@@ -252,7 +259,8 @@
                   <span class="live-indicator" style="background: var(--accent-blue); box-shadow: 0 0 6px var(--accent-blue);"></span>
                   <span>Lensa 2: Fixed Wide-Angle</span>
                 </div>
-                <video id="dualVideoCam2" playsinline></video>
+                <video id="dualVideoCam2" controls playsinline muted></video>
+                <button type="button" class="btn-audio-overlay" id="btnAudioCam2" title="Nyalakan/Matikan Suara Lensa 2">🔇 Buka Suara</button>
                 <div id="dualOverlayCam2" class="dual-overlay" style="display: none;">Klip Lensa 2 tidak tersedia</div>
               </div>
             </div>
